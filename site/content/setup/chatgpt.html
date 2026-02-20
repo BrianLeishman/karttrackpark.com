@@ -1,0 +1,50 @@
+---
+title: Connect JustLog to ChatGPT
+hide_title: true
+---
+
+<div class="mx-auto" style="max-width:700px">
+    <h2 class="mb-4">Connect JustLog to ChatGPT</h2>
+    <p>JustLog works as an MCP server that connects directly to ChatGPT. Follow these steps to set it up.</p>
+
+    <div class="alert alert-info">
+        <i class="fa-solid fa-circle-info me-2"></i>
+        <strong>Requires ChatGPT Pro, Team, Enterprise, or Edu.</strong> Developer mode is not available on the free plan.
+    </div>
+
+    <h4 class="mt-5">1. Enable Developer Mode</h4>
+    <p>In ChatGPT, go to <strong>Settings &rarr; Apps &amp; Connectors &rarr; Advanced settings</strong> and toggle <strong>Developer mode</strong> on.</p>
+
+    <h4 class="mt-5">2. Add JustLog as a Connector</h4>
+    <ol class="mb-3">
+        <li>In Settings, click <strong>Apps &amp; Connectors</strong></li>
+        <li>Click <strong>Create</strong></li>
+        <li>Fill in the fields:
+            <ul class="mt-2">
+                <li><strong>Name:</strong> JustLog</li>
+                <li><strong>Description:</strong> Track food, exercise &amp; weight</li>
+                <li><strong>MCP Server URL:</strong></li>
+            </ul>
+            <div class="input-group input-group-sm mt-2 mb-2" style="max-width:500px">
+                <input type="text" class="form-control font-monospace" value="https://k24xsd279c.execute-api.us-east-1.amazonaws.com/mcp" readonly id="mcp-url">
+                <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('mcp-url').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+            </div>
+        </li>
+        <li>Set <strong>Authentication</strong> to <strong>OAuth</strong></li>
+        <li>Leave <strong>Client ID</strong> and <strong>Client Secret</strong> blank</li>
+        <li>Check the acknowledgment box and click <strong>Create</strong></li>
+    </ol>
+
+    <h4 class="mt-5">3. Sign In</h4>
+    <p>Start a new conversation in ChatGPT and select JustLog from the tools menu. The first time you use it, ChatGPT will redirect you to sign in with your JustLog account. After signing in, you're all set.</p>
+
+    <h4 class="mt-5">4. Start Logging</h4>
+    <p>Just talk naturally. Try things like:</p>
+    <ul>
+        <li><em>"I had 2 eggs and toast for breakfast"</em></li>
+        <li><em>"I went for a 30 minute run"</em></li>
+        <li><em>"I weigh 185 lbs"</em></li>
+        <li><em>"What have I eaten today?"</em></li>
+        <li><em>"How many calories this week?"</em></li>
+    </ul>
+</div>

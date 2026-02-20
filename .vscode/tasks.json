@@ -1,0 +1,84 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "type": "shell",
+      "command": "pnpm dev",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev:api",
+      "type": "shell",
+      "command": "pnpm dev:api",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev:all",
+      "dependsOn": ["dev", "dev:api"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "pnpm build",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "lint",
+      "type": "shell",
+      "command": "pnpm lint",
+      "group": "build",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "lint:fix",
+      "type": "shell",
+      "command": "pnpm lint:fix",
+      "group": "build",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "deploy:api",
+      "type": "shell",
+      "command": "pnpm deploy:api",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "deploy:mcp",
+      "type": "shell",
+      "command": "pnpm deploy:mcp",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "deploy:site",
+      "type": "shell",
+      "command": "pnpm deploy:site",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "deploy:all",
+      "type": "shell",
+      "command": "pnpm deploy:all",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

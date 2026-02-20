@@ -1,0 +1,6 @@
+{{ define "main" }}
+<article>
+    {{ if not .Params.hide_title }}<h1>{{ .Title }}</h1>{{ end }}
+    {{ .Content }}
+</article>
+{{ end }}

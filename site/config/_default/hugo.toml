@@ -1,0 +1,29 @@
+baseURL = "https://justlog.io/"
+title = "JustLog"
+theme = []
+
+[params]
+apiBase = "https://k24xsd279c.execute-api.us-east-1.amazonaws.com"
+[[module.mounts]]
+source = "layouts"
+target = "layouts"
+
+[[module.mounts]]
+source = "assets"
+target = "assets"
+
+[[module.mounts]]
+source = "static"
+target = "static"
+
+[[module.mounts]]
+source = "content"
+target = "content"
+
+[[module.mounts]]
+source = "node_modules"
+target = "assets/node_modules"
+
+[[module.mounts]]
+source = "node_modules/@fortawesome/fontawesome-free/webfonts"
+target = "static/webfonts"

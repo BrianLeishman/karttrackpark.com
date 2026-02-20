@@ -1,0 +1,24 @@
+# Dependencies
+site/node_modules/
+
+# esbuild output
+site/assets/js/
+
+# Hugo output
+site/public/
+site/resources/
+site/.hugo_build.lock
+public/
+.hugo_build.lock
+
+# Go
+/bootstrap
+/api
+/mcp
+*.zip
+
+# Air (Go hot-reload)
+tmp/
+
+# OS
+.DS_Store

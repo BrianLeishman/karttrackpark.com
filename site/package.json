@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "go run ../go/cmd/hugo-server/",
+    "dev:api": "cd .. && air",
+    "build": "go run ../go/cmd/compile-ts/ && hugo --minify",
+"lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.1.0",
+    "axios": "^1.13.5",
+    "bootstrap": "^5.3.8",
+    "chart.js": "^4.5.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@stylistic/eslint-plugin": "^4.4.0",
+    "@types/bootstrap": "^5.2.10",
+    "eslint": "^9.23.0",
+    "globals": "^16.0.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.0"
+  }
+}

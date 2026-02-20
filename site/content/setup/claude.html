@@ -1,0 +1,78 @@
+---
+title: Connect JustLog to Claude
+hide_title: true
+---
+
+<div class="mx-auto" style="max-width:700px">
+    <h2 class="mb-4">Connect JustLog to Claude</h2>
+    <p>JustLog works as an MCP server with both Claude on the web and Claude Code. Pick your setup below.</p>
+
+    <div class="alert alert-info">
+        <i class="fa-solid fa-circle-info me-2"></i>
+        Both methods require a JustLog API key. <a href="/keys/" class="alert-link">Create one here</a> first.
+    </div>
+
+    <h3 class="mt-5"><i class="fa-solid fa-globe me-2"></i>Claude Web (claude.ai)</h3>
+
+    <h4 class="mt-4">1. Create an API Key</h4>
+    <p>Go to the <a href="/keys/">API Keys</a> page, give your key a name, and click <strong>Create</strong>. Copy the key &mdash; you'll need it in the next step.</p>
+
+    <h4 class="mt-4">2. Add the MCP Server</h4>
+    <ol>
+        <li>Go to <a href="https://claude.ai" target="_blank" rel="noopener">claude.ai</a></li>
+        <li>Open <strong>Settings</strong> (click your name in the bottom-left)</li>
+        <li>Click <strong>Integrations</strong>, then <strong>Add more</strong></li>
+        <li>Choose <strong>Add custom MCP server</strong></li>
+        <li>Fill in:
+            <ul class="mt-2">
+                <li><strong>Name:</strong> JustLog</li>
+                <li><strong>URL:</strong></li>
+            </ul>
+            <div class="input-group input-group-sm mt-2 mb-2" style="max-width:500px">
+                <input type="text" class="form-control font-monospace" value="https://k24xsd279c.execute-api.us-east-1.amazonaws.com/mcp" readonly id="mcp-url-web">
+                <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('mcp-url-web').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+            </div>
+        </li>
+        <li>For <strong>Authentication</strong>, select <strong>API Key (Header)</strong></li>
+        <li>Enter your API key from step 1</li>
+        <li>Click <strong>Add</strong></li>
+    </ol>
+
+    <h4 class="mt-4">3. Start Logging</h4>
+    <p>Start a new conversation and JustLog tools will be available automatically.</p>
+
+    <hr class="my-5">
+
+    <h3><i class="fa-solid fa-terminal me-2"></i>Claude Code (CLI)</h3>
+
+    <h4 class="mt-4">1. Create an API Key</h4>
+    <p>Go to the <a href="/keys/">API Keys</a> page, give your key a name, and click <strong>Create</strong>. Copy the key.</p>
+
+    <h4 class="mt-4">2. Add to Your MCP Config</h4>
+    <p>Add the following to your Claude Code MCP settings file (<code>~/.claude/claude_mcp_config.json</code>):</p>
+    <div class="position-relative">
+        <pre class="bg-body-tertiary rounded p-3"><code id="claude-code-config">{
+  "mcpServers": {
+    "justlog": {
+      "type": "url",
+      "url": "https://k24xsd279c.execute-api.us-east-1.amazonaws.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}</code></pre>
+        <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-2" type="button" onclick="navigator.clipboard.writeText(document.getElementById('claude-code-config').textContent).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>
+    <p class="text-body-secondary small">Replace <code>YOUR_API_KEY</code> with the key from step 1.</p>
+
+    <h4 class="mt-4">3. Start Logging</h4>
+    <p>Launch Claude Code and JustLog tools will be available. Try things like:</p>
+    <ul>
+        <li><em>"I had 2 eggs and toast for breakfast"</em></li>
+        <li><em>"I went for a 30 minute run"</em></li>
+        <li><em>"I weigh 185 lbs"</em></li>
+        <li><em>"What have I eaten today?"</em></li>
+        <li><em>"How many calories this week?"</em></li>
+    </ul>
+</div>

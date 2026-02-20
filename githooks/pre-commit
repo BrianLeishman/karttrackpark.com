@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euo pipefail
+
+GOFMT_BIN="${GOFMT_BIN:-gofmt}"
+
+# Format staged Go files
+gofiles=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.go$' || true)
+
+if [ -n "$gofiles" ]; then
+    needs_format=""
+    for file in $gofiles; do
+        if "$GOFMT_BIN" -l "$file" | grep -q .; then
+            needs_format="$needs_format $file"
+        fi
+    done
+
+    if [ -n "$needs_format" ]; then
+        echo "Running gofmt on:$needs_format"
+        $GOFMT_BIN -w $needs_format
+        git add $needs_format
+    fi
+fi
+
+# Lint staged TypeScript files (under site/)
+tsfiles=$(git diff --cached --name-only --diff-filter=ACMR | grep '^site/.*\.ts$' | sed 's|^site/||' || true)
+
+if [ -n "$tsfiles" ]; then
+    echo "Running eslint..."
+    cd site
+    npx eslint $tsfiles
+    cd ..
+fi

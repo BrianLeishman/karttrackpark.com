@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en" data-bs-theme="auto">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ block "title" . }}{{ if .IsHome }}{{ .Site.Title }} — Track Calories & Macros With Your AI Assistant{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}{{ end }}</title>
+    <meta name="description" content="{{ .Site.Params.description | default "Track calories, macros, exercise, and weight through your AI assistant. No app needed — just talk." }}">
+    <meta name="api-base" content="{{ .Site.Params.apiBase }}">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <meta property="og:title" content="{{ if .IsHome }}{{ .Site.Title }} — Track Calories & Macros With Your AI Assistant{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}">
+    <meta property="og:description" content="Track calories, macros, exercise, and weight through your AI assistant. No app needed — just talk.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ .Permalink }}">
+
+    {{ $opts := dict "transpiler" "dartsass" "silenceDeprecations" (slice "import" "global-builtin" "color-functions") }}
+    {{ $css := resources.Get "scss/main.scss" | toCSS $opts | minify | fingerprint }}
+    <link rel="stylesheet" href="{{ $css.RelPermalink }}" integrity="{{ $css.Data.Integrity }}">
+
+    {{ $faBase := resources.Get "node_modules/@fortawesome/fontawesome-free/css/fontawesome.min.css" | resources.Copy "css/fa-fontawesome.css" | fingerprint }}
+    <link rel="stylesheet" href="{{ $faBase.RelPermalink }}" integrity="{{ $faBase.Data.Integrity }}">
+    {{ $faSolid := resources.Get "node_modules/@fortawesome/fontawesome-free/css/solid.min.css" | resources.Copy "css/fa-solid.css" | fingerprint }}
+    <link rel="stylesheet" href="{{ $faSolid.RelPermalink }}" integrity="{{ $faSolid.Data.Integrity }}">
+    {{ $faBrands := resources.Get "node_modules/@fortawesome/fontawesome-free/css/brands.min.css" | resources.Copy "css/fa-brands.css" | fingerprint }}
+    <link rel="stylesheet" href="{{ $faBrands.RelPermalink }}" integrity="{{ $faBrands.Data.Integrity }}">
+    {{ block "head" . }}{{ end }}
+    <script>
+    (() => {
+        const getStoredTheme = () => localStorage.getItem('theme');
+        const getPreferredTheme = () => getStoredTheme() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const setTheme = t => { document.documentElement.setAttribute('data-bs-theme', t); };
+        setTheme(getPreferredTheme());
+        window.addEventListener('DOMContentLoaded', () => {
+            const update = () => {
+                const stored = getStoredTheme();
+                const active = stored || 'auto';
+                document.querySelectorAll('[data-bs-theme-value]').forEach(el => {
+                    el.classList.toggle('active', el.getAttribute('data-bs-theme-value') === active);
+                });
+            };
+            update();
+            document.querySelectorAll('[data-bs-theme-value]').forEach(el => {
+                el.addEventListener('click', () => {
+                    const t = el.getAttribute('data-bs-theme-value');
+                    if (t === 'auto') {
+                        localStorage.removeItem('theme');
+                        const resolved = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                        setTheme(resolved);
+                    } else {
+                        localStorage.setItem('theme', t);
+                        setTheme(t);
+                    }
+                    update();
+                });
+            });
+            matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (!getStoredTheme()) { setTheme(getPreferredTheme()); update(); }
+            });
+        });
+    })();
+    </script>
+</head>
+<body class="d-flex flex-column min-vh-100">
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container">
+            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/"><img src="/favicon.svg" alt="" width="24" height="24">{{ .Site.Title }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbar-collapse">
+                <ul class="navbar-nav me-auto" id="nav-links"></ul>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dropdown">
+                        <button class="btn btn-link text-body-secondary p-0 border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Toggle theme">
+                            <i class="fa-solid fa-circle-half-stroke fa-lg"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><button class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="light"><i class="fa-solid fa-sun fa-fw"></i> Light</button></li>
+                            <li><button class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="dark"><i class="fa-solid fa-moon fa-fw"></i> Dark</button></li>
+                            <li><button class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="auto"><i class="fa-solid fa-circle-half-stroke fa-fw"></i> Auto</button></li>
+                        </ul>
+                    </div>
+                    <a href="https://github.com/BrianLeishman/justlog.io" class="text-body-secondary" aria-label="GitHub" target="_blank" rel="noopener">
+                        <i class="fa-brands fa-github fa-lg"></i>
+                    </a>
+                    <div id="auth"></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4 flex-grow-1">
+        {{ block "main" . }}{{ end }}
+    </main>
+
+    <footer class="container py-4 mt-auto border-top">
+        <div class="d-flex flex-wrap justify-content-between align-items-center text-body-secondary small">
+            <span>&copy; {{ now.Year }} JustLog</span>
+            <div class="d-flex gap-3">
+                <a href="/terms/" class="text-body-secondary text-decoration-none">Terms</a>
+                <a href="/privacy/" class="text-body-secondary text-decoration-none">Privacy</a>
+                <a href="/setup/chatgpt/" class="text-body-secondary text-decoration-none">ChatGPT Setup</a>
+                <a href="/setup/claude/" class="text-body-secondary text-decoration-none">Claude Setup</a>
+                <a href="/support/" class="text-body-secondary text-decoration-none">Support</a>
+                <a href="https://github.com/BrianLeishman/justlog.io" class="text-body-secondary text-decoration-none" target="_blank" rel="noopener">GitHub</a>
+            </div>
+        </div>
+    </footer>
+
+    {{ with resources.Get "js/app.js" | fingerprint }}
+        <script type="module" src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}"></script>
+    {{ end }}
+    {{ with resources.Get "js/app.js.map" }}{{ .Publish }}{{ end }}
+</body>
+</html>
