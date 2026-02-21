@@ -4,7 +4,7 @@
     "module": "ES2020",
     "lib": ["ESNext", "DOM"],
     "strict": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "outDir": "assets/js",

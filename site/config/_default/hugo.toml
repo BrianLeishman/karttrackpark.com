@@ -4,6 +4,7 @@ theme = []
 
 [params]
 apiBase = "https://62lt3y3apd.execute-api.us-east-1.amazonaws.com"
+assetsBase = "https://assets.karttrackpark.com"
 cognitoDomain = "ktp-auth.auth.us-east-1.amazoncognito.com"
 cognitoClientId = "5qs365gjfsc6kd1lnfbqbldo22"
 [[module.mounts]]
@@ -29,3 +30,7 @@ target = "assets/node_modules"
 [[module.mounts]]
 source = "node_modules/@fortawesome/fontawesome-free/webfonts"
 target = "static/webfonts"
+
+[[module.mounts]]
+source = "node_modules/intl-tel-input/build/img"
+target = "static/iti"

@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.79.2
 	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
 	github.com/evanw/esbuild v0.27.3
+	github.com/nyaruka/phonenumbers v1.6.10
 	github.com/rs/xid v1.6.0
 )
 
@@ -33,6 +34,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.6 // indirect
 	github.com/aws/smithy-go v1.24.0 // indirect
-	github.com/stretchr/testify v1.8.1 // indirect
+	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )

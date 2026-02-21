@@ -1,4 +1,5 @@
 import { api } from './api';
+import { trackDetailUrl } from './track-detail';
 
 interface Event {
     event_id: string;
@@ -44,7 +45,7 @@ function eventCard(event: Event): string {
                 <div class="card-body">
                     <h5 class="card-title">${event.name}</h5>
                     <p class="card-text text-body-secondary small mb-2">
-                        <i class="fa-solid fa-location-dot me-1"></i>${event.track_name}
+                        <i class="fa-solid fa-location-dot me-1"></i><a href="${trackDetailUrl(event.track_id, event.track_name)}" class="text-body-secondary">${event.track_name}</a>
                     </p>
                     <p class="card-text text-body-secondary small mb-2">
                         <i class="fa-solid fa-clock me-1"></i>${formatDate(event.start_time)}${event.end_time ? ` — ${formatDate(event.end_time)}` : ''}

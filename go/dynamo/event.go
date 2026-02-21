@@ -128,7 +128,8 @@ func DeleteEvent(ctx context.Context, eventID string) error {
 }
 
 // ListUpcomingEvents returns events with startTime >= now, sorted ascending.
-func ListUpcomingEvents(ctx context.Context, limit int) ([]Event, error) {
+// If trackID is non-empty, only events for that track are returned.
+func ListUpcomingEvents(ctx context.Context, limit int, trackID string) ([]Event, error) {
 	c, err := client()
 	if err != nil {
 		return nil, err
@@ -136,7 +137,7 @@ func ListUpcomingEvents(ctx context.Context, limit int) ([]Event, error) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	out, err := c.Query(ctx, &dynamodb.QueryInput{
+	input := &dynamodb.QueryInput{
 		TableName:              aws.String(TableName),
 		IndexName:              aws.String("gsi1"),
 		KeyConditionExpression: aws.String("gsi1pk = :pk AND gsi1sk >= :now"),
@@ -146,7 +147,15 @@ func ListUpcomingEvents(ctx context.Context, limit int) ([]Event, error) {
 		},
 		ScanIndexForward: aws.Bool(true),
 		Limit:            aws.Int32(int32(limit)),
-	})
+	}
+
+	if trackID != "" {
+		input.FilterExpression = aws.String("trackId = :tid")
+		input.ExpressionAttributeValues[":tid"] = &types.AttributeValueMemberS{Value: trackID}
+		input.Limit = aws.Int32(100)
+	}
+
+	out, err := c.Query(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("list upcoming events: %w", err)
 	}
@@ -155,11 +164,16 @@ func ListUpcomingEvents(ctx context.Context, limit int) ([]Event, error) {
 	if err := attributevalue.UnmarshalListOfMaps(out.Items, &events); err != nil {
 		return nil, fmt.Errorf("unmarshal events: %w", err)
 	}
+
+	if trackID != "" && len(events) > limit {
+		events = events[:limit]
+	}
 	return events, nil
 }
 
 // ListRecentEvents returns events with startTime < now, sorted descending (most recent first).
-func ListRecentEvents(ctx context.Context, limit int) ([]Event, error) {
+// If trackID is non-empty, only events for that track are returned.
+func ListRecentEvents(ctx context.Context, limit int, trackID string) ([]Event, error) {
 	c, err := client()
 	if err != nil {
 		return nil, err
@@ -167,7 +181,7 @@ func ListRecentEvents(ctx context.Context, limit int) ([]Event, error) {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	out, err := c.Query(ctx, &dynamodb.QueryInput{
+	input := &dynamodb.QueryInput{
 		TableName:              aws.String(TableName),
 		IndexName:              aws.String("gsi1"),
 		KeyConditionExpression: aws.String("gsi1pk = :pk AND gsi1sk < :now"),
@@ -177,7 +191,15 @@ func ListRecentEvents(ctx context.Context, limit int) ([]Event, error) {
 		},
 		ScanIndexForward: aws.Bool(false),
 		Limit:            aws.Int32(int32(limit)),
-	})
+	}
+
+	if trackID != "" {
+		input.FilterExpression = aws.String("trackId = :tid")
+		input.ExpressionAttributeValues[":tid"] = &types.AttributeValueMemberS{Value: trackID}
+		input.Limit = aws.Int32(100)
+	}
+
+	out, err := c.Query(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("list recent events: %w", err)
 	}
@@ -185,6 +207,10 @@ func ListRecentEvents(ctx context.Context, limit int) ([]Event, error) {
 	var events []Event
 	if err := attributevalue.UnmarshalListOfMaps(out.Items, &events); err != nil {
 		return nil, fmt.Errorf("unmarshal events: %w", err)
+	}
+
+	if trackID != "" && len(events) > limit {
+		events = events[:limit]
 	}
 	return events, nil
 }

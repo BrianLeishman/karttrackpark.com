@@ -1,7 +1,7 @@
 [build]
 cmd = "go build -o ./tmp/api ./go/lambda/api/"
 bin = "./tmp/api"
-full_bin = "AWS_PROFILE=ktp ./tmp/api 2>&1 | tee ./tmp/api.log"
+full_bin = "[ -f ./tmp/api.log ] && mv ./tmp/api.log ./tmp/api.log.1; AWS_PROFILE=ktp COGNITO_DOMAIN=ktp-auth.auth.us-east-1.amazoncognito.com COGNITO_CLIENT_ID=5qs365gjfsc6kd1lnfbqbldo22 COGNITO_CLIENT_SECRET=1jcbc9ucqi5n6v8c2neqfbbvbe3b1s47o9o020bp9ma4gu838qnb ./tmp/api 2>&1 | tee ./tmp/api.log"
 watch_dir = "go"
 include_ext = ["go"]
 exclude_dir = ["tmp", "site", "aws", "node_modules"]

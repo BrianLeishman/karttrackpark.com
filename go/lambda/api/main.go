@@ -18,6 +18,7 @@ func main() {
 	mux.HandleFunc("POST /api/tracks", handleCreateTrack)
 	mux.HandleFunc("GET /api/tracks", handleListTracks)
 	mux.HandleFunc("GET /api/tracks/{id}", handleGetTrack)
+	mux.HandleFunc("GET /api/tracks/{id}/public", handleGetTrackPublic)
 	mux.HandleFunc("PUT /api/tracks/{id}", handleUpdateTrack)
 
 	// Layouts
@@ -46,6 +47,7 @@ func main() {
 
 	// Upload
 	mux.HandleFunc("POST /api/upload-url", handleUploadURL)
+	mux.HandleFunc("POST /api/asset-url", handleAssetURL)
 
 	// Events
 	mux.HandleFunc("GET /api/events", handleListEvents)

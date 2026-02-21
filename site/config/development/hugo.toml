@@ -1,2 +1,5 @@
 [params]
 apiBase = "http://localhost:25565"
+assetsBase = "https://assets.karttrackpark.com"
+cognitoDomain = "ktp-auth.auth.us-east-1.amazoncognito.com"
+cognitoClientId = "5qs365gjfsc6kd1lnfbqbldo22"

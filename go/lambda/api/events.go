@@ -9,14 +9,16 @@ import (
 )
 
 func handleListEvents(w http.ResponseWriter, r *http.Request) {
-	upcoming, err := dynamo.ListUpcomingEvents(r.Context(), 10)
+	trackID := r.URL.Query().Get("track_id")
+
+	upcoming, err := dynamo.ListUpcomingEvents(r.Context(), 10, trackID)
 	if err != nil {
 		log.Printf("list upcoming events error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	recent, err := dynamo.ListRecentEvents(r.Context(), 10)
+	recent, err := dynamo.ListRecentEvents(r.Context(), 10, trackID)
 	if err != nil {
 		log.Printf("list recent events error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

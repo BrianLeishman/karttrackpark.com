@@ -2,9 +2,14 @@ import 'bootstrap';
 import { handleCallback, getUser, login, logout } from './auth';
 import { renderEvents } from './events';
 import { renderKeys } from './keys';
+import { renderTrackDetail } from './track-detail';
+import { renderTrackEdit } from './track-edit';
+import { renderMyTracks } from './tracks';
 
 const pages: Record<string, (el: HTMLElement) => Promise<void>> = {
-    keys: renderKeys,
+    'keys': renderKeys,
+    'my-tracks': renderMyTracks,
+    'track-edit': renderTrackEdit,
 };
 
 async function init(): Promise<void> {
@@ -17,10 +22,15 @@ async function init(): Promise<void> {
         }
     }
 
-    // Render public events on homepage (no auth required)
+    // Render public pages (no auth required)
     const eventsPage = document.getElementById('events-page');
     if (eventsPage) {
         void renderEvents(eventsPage);
+    }
+
+    const trackDetail = document.getElementById('track-detail');
+    if (trackDetail) {
+        void renderTrackDetail(trackDetail);
     }
 
     // Render auth state in navbar
@@ -31,23 +41,32 @@ async function init(): Promise<void> {
 
     const user = getUser();
     if (user) {
-        // Build nav links
+        // Build nav links with user dropdown
+        const path = window.location.pathname;
+        const pic = user.picture
+            ? `<img src="${user.picture}" alt="" class="rounded-circle me-1" width="22" height="22" referrerpolicy="no-referrer"> `
+            : '';
         const navLinks = document.getElementById('nav-links');
         if (navLinks) {
-            const path = window.location.pathname;
             navLinks.innerHTML = `
                 <li class="nav-item"><a class="nav-link${path === '/' ? ' active' : ''}" href="/">Events</a></li>
-                <li class="nav-item"><a class="nav-link${path === '/keys/' ? ' active' : ''}" href="/keys/">API Keys</a></li>
             `;
         }
 
         authContainer.innerHTML = `
-            <div class="d-flex align-items-center gap-2">
-                ${user.picture ? `<img src="${user.picture}" alt="" class="rounded-circle" width="28" height="28" referrerpolicy="no-referrer">` : ''}
-                <span class="text-decoration-none d-none d-sm-inline">${user.name}</span>
-                <button class="btn btn-sm btn-outline-secondary" id="logout-btn">Sign out</button>
+            <div class="dropdown">
+                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    ${pic}${user.name}
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item${path === '/my/tracks/' ? ' active' : ''}" href="/my/tracks/">My Tracks</a></li>
+                    <li><a class="dropdown-item${path === '/my/keys/' ? ' active' : ''}" href="/my/keys/">API Keys</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><button class="dropdown-item" id="logout-btn">Sign out</button></li>
+                </ul>
             </div>
         `;
+
         document.getElementById('logout-btn')?.addEventListener('click', () => {
             logout();
         });
@@ -69,7 +88,8 @@ async function init(): Promise<void> {
         for (const id of Object.keys(pages)) {
             const el = document.getElementById(id);
             if (el) {
-                const label = id === 'keys' ? 'API keys' : id;
+                const labels: Record<string, string> = { 'keys': 'API keys', 'my-tracks': 'tracks', 'track-edit': 'track settings' };
+                const label = labels[id] ?? id;
                 el.innerHTML = `
                     <div class="text-center py-5">
                         <p class="text-body-secondary mb-3">Sign in to view your ${label}.</p>

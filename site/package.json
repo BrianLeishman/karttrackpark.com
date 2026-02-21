@@ -5,14 +5,16 @@
     "dev": "go run ../go/cmd/hugo-server/",
     "dev:api": "cd .. && air",
     "build": "go run ../go/cmd/compile-ts/ && hugo --minify",
-"lint": "eslint .",
+    "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",
     "axios": "^1.13.5",
     "bootstrap": "^5.3.8",
-    "chart.js": "^4.5.1"
+    "chart.js": "^4.5.1",
+    "intl-tel-input": "^26.5.1",
+    "libphonenumber-js": "^1.12.37"
   },
   "devDependencies": {
     "@eslint/js": "^9.23.0",
