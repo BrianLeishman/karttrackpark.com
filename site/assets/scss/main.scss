@@ -43,3 +43,12 @@
 @import '../node_modules/bootstrap/scss/utilities/api';
 
 // 6. Custom styles (after Bootstrap)
+
+// Theme-aware logo switching
+.logo-dark { display: none; }
+.logo-light { display: inline; }
+
+[data-bs-theme="dark"] {
+  .logo-dark { display: inline; }
+  .logo-light { display: none; }
+}

@@ -14,7 +14,6 @@ public/
 # Go
 /bootstrap
 /api
-/mcp
 *.zip
 
 # Air (Go hot-reload)

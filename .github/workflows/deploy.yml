@@ -49,8 +49,5 @@ jobs:
       - name: Deploy API Lambda
         run: bash scripts/deploy-api.sh
 
-      - name: Deploy MCP Lambda
-        run: bash scripts/deploy-mcp.sh
-
       - name: Deploy Site
         run: bash scripts/deploy-site.sh

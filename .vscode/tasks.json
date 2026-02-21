@@ -59,14 +59,7 @@
       "group": "build",
       "problemMatcher": []
     },
-    {
-      "label": "deploy:mcp",
-      "type": "shell",
-      "command": "pnpm deploy:mcp",
-      "group": "build",
-      "problemMatcher": []
-    },
-    {
+{
       "label": "deploy:site",
       "type": "shell",
       "command": "pnpm deploy:site",

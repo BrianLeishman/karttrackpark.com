@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
-const TableName = "justlog"
+const TableName = "ktp"
 
 var client = sync.OnceValues(func() (*dynamodb.Client, error) {
 	cfg, err := config.LoadDefaultConfig(context.Background())

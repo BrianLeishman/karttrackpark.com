@@ -67,23 +67,14 @@ export async function renderKeys(container: HTMLElement): Promise<void> {
     container.innerHTML = '<div class="text-center py-4"><div class="spinner-border" role="status"></div></div>';
 
     const keys = await fetchAPIKeys();
-    const endpoint = 'https://k24xsd279c.execute-api.us-east-1.amazonaws.com/mcp';
-
     keys.sort((a, b) => a.created_at.localeCompare(b.created_at));
     const keyRows = keys.length > 0
         ? keys.map(renderKeyRow).join('')
         : '<tr><td colspan="3" class="text-body-secondary">No API keys yet.</td></tr>';
 
     container.innerHTML = `
-        <h4>MCP Setup</h4>
-        <p class="text-body-secondary">Connect your AI assistant to JustLog using the MCP protocol.</p>
-        <div class="mb-3">
-            <label class="form-label fw-semibold">Endpoint</label>
-            <div class="input-group">
-                <input type="text" class="form-control form-control-sm font-monospace" value="${endpoint}" readonly>
-                <button class="btn btn-outline-secondary btn-sm" type="button" id="copy-endpoint">Copy</button>
-            </div>
-        </div>
+        <h4>API Keys</h4>
+        <p class="text-body-secondary">Manage your API keys for Kart Track Park.</p>
         <div class="mb-4">
             <label class="form-label fw-semibold">API Keys</label>
             <div class="table-responsive">
@@ -108,14 +99,6 @@ export async function renderKeys(container: HTMLElement): Promise<void> {
 }
 
 function bindButtons(refresh: () => Promise<void>): void {
-    document.getElementById('copy-endpoint')?.addEventListener('click', e => {
-        const btn = e.currentTarget as HTMLElement;
-        const input = btn.parentElement?.querySelector('input');
-        if (input) {
-            copyWithFeedback(btn, input.value);
-        }
-    });
-
     document.getElementById('create-key-btn')?.addEventListener('click', async () => {
         const input = document.getElementById('new-key-label') as HTMLInputElement | null;
         const label = input?.value.trim() || '';

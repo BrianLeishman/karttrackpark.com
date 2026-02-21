@@ -1,9 +1,11 @@
-baseURL = "https://justlog.io/"
-title = "JustLog"
+baseURL = "https://karttrackpark.com/"
+title = "Kart Track Park"
 theme = []
 
 [params]
-apiBase = "https://k24xsd279c.execute-api.us-east-1.amazonaws.com"
+apiBase = "https://62lt3y3apd.execute-api.us-east-1.amazonaws.com"
+cognitoDomain = "ktp-auth.auth.us-east-1.amazoncognito.com"
+cognitoClientId = "5qs365gjfsc6kd1lnfbqbldo22"
 [[module.mounts]]
 source = "layouts"
 target = "layouts"

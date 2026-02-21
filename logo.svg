@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200">
+  <!-- Speed stripe background accent -->
+  <polygon points="0,95 600,75 600,105 0,125" fill="#e63946" opacity="0.12"/>
+
+  <!-- KART TRACK - main hero text, bold italic -->
+  <g transform="skewX(-8)">
+    <text x="310" y="110" text-anchor="middle"
+          font-family="'Impact', 'Arial Black', 'Helvetica Neue', sans-serif"
+          font-weight="900" font-size="100" font-style="italic"
+          fill="#1a1a2e" letter-spacing="2">
+      KART TRACK
+    </text>
+    <!-- Text outline for depth -->
+    <text x="310" y="110" text-anchor="middle"
+          font-family="'Impact', 'Arial Black', 'Helvetica Neue', sans-serif"
+          font-weight="900" font-size="100" font-style="italic"
+          fill="none" stroke="#1a1a2e" stroke-width="0.5" letter-spacing="2">
+      KART TRACK
+    </text>
+  </g>
+
+  <!-- PARK - accent word below -->
+  <g transform="skewX(-8)">
+    <text x="310" y="162" text-anchor="middle"
+          font-family="'Impact', 'Arial Black', 'Helvetica Neue', sans-serif"
+          font-weight="900" font-size="52" font-style="italic"
+          fill="#e63946" letter-spacing="14">
+      PARK
+    </text>
+  </g>
+
+  <!-- Speed lines on left -->
+  <g transform="skewX(-8)" opacity="0.7">
+    <line x1="28" y1="78" x2="68" y2="78" stroke="#e63946" stroke-width="3" stroke-linecap="round"/>
+    <line x1="18" y1="90" x2="72" y2="90" stroke="#e63946" stroke-width="3" stroke-linecap="round"/>
+    <line x1="28" y1="102" x2="68" y2="102" stroke="#e63946" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <!-- Checkered stripe on right -->
+  <g transform="translate(540, 120) skewX(-8)">
+    <rect x="0"  y="0"  width="7" height="7" fill="#1a1a2e"/>
+    <rect x="7"  y="0"  width="7" height="7" fill="none"/>
+    <rect x="14" y="0"  width="7" height="7" fill="#1a1a2e"/>
+    <rect x="21" y="0"  width="7" height="7" fill="none"/>
+    <rect x="0"  y="7"  width="7" height="7" fill="none"/>
+    <rect x="7"  y="7"  width="7" height="7" fill="#1a1a2e"/>
+    <rect x="14" y="7"  width="7" height="7" fill="none"/>
+    <rect x="21" y="7"  width="7" height="7" fill="#1a1a2e"/>
+    <rect x="0"  y="14" width="7" height="7" fill="#1a1a2e"/>
+    <rect x="7"  y="14" width="7" height="7" fill="none"/>
+    <rect x="14" y="14" width="7" height="7" fill="#1a1a2e"/>
+    <rect x="21" y="14" width="7" height="7" fill="none"/>
+  </g>
+
+  <!-- Thin underline -->
+  <line x1="130" y1="175" x2="470" y2="175" stroke="#e63946" stroke-width="2" stroke-linecap="round" transform="skewX(-8)"/>
+</svg>

@@ -18,10 +18,6 @@ func hashKey(raw string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func apikeyLookupPK(hash string) string {
-	return "apikey#" + hash
-}
-
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
@@ -30,14 +26,13 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// APIKeyInfo holds metadata about an API key (never the raw key).
 type APIKeyInfo struct {
 	KeyID     string `json:"key_id"`
 	Label     string `json:"label"`
 	CreatedAt string `json:"created_at"`
 }
 
-// CreateAPIKey generates a new API key for the user with the given label.
+// CreateAPIKey generates a new API key for the user.
 // Returns the raw key (only time it's available) and the key ID.
 func CreateAPIKey(ctx context.Context, uid, label string) (rawKey string, keyID string, err error) {
 	c, err := client()
@@ -45,7 +40,7 @@ func CreateAPIKey(ctx context.Context, uid, label string) (rawKey string, keyID 
 		return "", "", err
 	}
 
-	keyID, err = randomHex(4) // 8-char hex
+	keyID, err = randomHex(4)
 	if err != nil {
 		return "", "", fmt.Errorf("generate key id: %w", err)
 	}
@@ -55,7 +50,6 @@ func CreateAPIKey(ctx context.Context, uid, label string) (rawKey string, keyID 
 		return "", "", fmt.Errorf("generate key: %w", err)
 	}
 	hash := hashKey(raw)
-	lookupPK := apikeyLookupPK(hash)
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	_, err = c.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
@@ -64,11 +58,11 @@ func CreateAPIKey(ctx context.Context, uid, label string) (rawKey string, keyID 
 				Put: &types.Put{
 					TableName: aws.String(TableName),
 					Item: map[string]types.AttributeValue{
-						"uid":       &types.AttributeValueMemberS{Value: uid},
-						"sk":        &types.AttributeValueMemberS{Value: "apikey#" + keyID},
-						"KeyHash":   &types.AttributeValueMemberS{Value: hash},
-						"Label":     &types.AttributeValueMemberS{Value: label},
-						"CreatedAt": &types.AttributeValueMemberS{Value: now},
+						"pk":        &types.AttributeValueMemberS{Value: UserPK(uid)},
+						"sk":        &types.AttributeValueMemberS{Value: APIKeySK(keyID)},
+						"keyHash":   &types.AttributeValueMemberS{Value: hash},
+						"label":     &types.AttributeValueMemberS{Value: label},
+						"createdAt": &types.AttributeValueMemberS{Value: now},
 					},
 				},
 			},
@@ -76,10 +70,10 @@ func CreateAPIKey(ctx context.Context, uid, label string) (rawKey string, keyID 
 				Put: &types.Put{
 					TableName: aws.String(TableName),
 					Item: map[string]types.AttributeValue{
-						"uid":   &types.AttributeValueMemberS{Value: lookupPK},
-						"sk":    &types.AttributeValueMemberS{Value: lookupPK},
-						"UID":   &types.AttributeValueMemberS{Value: uid},
-						"KeyID": &types.AttributeValueMemberS{Value: keyID},
+						"pk":    &types.AttributeValueMemberS{Value: APIKeyLookupPK(hash)},
+						"sk":    &types.AttributeValueMemberS{Value: APIKeyLookupPK(hash)},
+						"uid":   &types.AttributeValueMemberS{Value: uid},
+						"keyId": &types.AttributeValueMemberS{Value: keyID},
 					},
 				},
 			},
@@ -101,12 +95,15 @@ func ListAPIKeys(ctx context.Context, uid string) ([]APIKeyInfo, error) {
 
 	out, err := c.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(TableName),
-		KeyConditionExpression: aws.String("uid = :uid AND begins_with(sk, :prefix)"),
+		KeyConditionExpression: aws.String("pk = :pk AND begins_with(sk, :prefix)"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":uid":    &types.AttributeValueMemberS{Value: uid},
-			":prefix": &types.AttributeValueMemberS{Value: "apikey#"},
+			":pk":     &types.AttributeValueMemberS{Value: UserPK(uid)},
+			":prefix": &types.AttributeValueMemberS{Value: "APIKEY#"},
 		},
-		ProjectionExpression: aws.String("sk, Label, CreatedAt"),
+		ProjectionExpression: aws.String("sk, #lbl, createdAt"),
+		ExpressionAttributeNames: map[string]string{
+			"#lbl": "label",
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list api keys: %w", err)
@@ -115,12 +112,12 @@ func ListAPIKeys(ctx context.Context, uid string) ([]APIKeyInfo, error) {
 	keys := make([]APIKeyInfo, 0, len(out.Items))
 	for _, item := range out.Items {
 		sk := item["sk"].(*types.AttributeValueMemberS).Value
-		keyID := sk[len("apikey#"):]
+		keyID := sk[len("APIKEY#"):]
 		info := APIKeyInfo{KeyID: keyID}
-		if v, ok := item["Label"].(*types.AttributeValueMemberS); ok {
+		if v, ok := item["label"].(*types.AttributeValueMemberS); ok {
 			info.Label = v.Value
 		}
-		if v, ok := item["CreatedAt"].(*types.AttributeValueMemberS); ok {
+		if v, ok := item["createdAt"].(*types.AttributeValueMemberS); ok {
 			info.CreatedAt = v.Value
 		}
 		keys = append(keys, info)
@@ -136,15 +133,15 @@ func LookupAPIKey(ctx context.Context, rawKey string) (string, error) {
 	}
 
 	hash := hashKey(rawKey)
-	lookupPK := apikeyLookupPK(hash)
+	pk := APIKeyLookupPK(hash)
 
 	out, err := c.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(TableName),
 		Key: map[string]types.AttributeValue{
-			"uid": &types.AttributeValueMemberS{Value: lookupPK},
-			"sk":  &types.AttributeValueMemberS{Value: lookupPK},
+			"pk": &types.AttributeValueMemberS{Value: pk},
+			"sk": &types.AttributeValueMemberS{Value: pk},
 		},
-		ProjectionExpression: aws.String("UID"),
+		ProjectionExpression: aws.String("uid"),
 	})
 	if err != nil {
 		return "", fmt.Errorf("lookup api key: %w", err)
@@ -153,7 +150,7 @@ func LookupAPIKey(ctx context.Context, rawKey string) (string, error) {
 		return "", fmt.Errorf("api key not found")
 	}
 
-	uid, ok := out.Item["UID"].(*types.AttributeValueMemberS)
+	uid, ok := out.Item["uid"].(*types.AttributeValueMemberS)
 	if !ok {
 		return "", fmt.Errorf("invalid api key record")
 	}
@@ -167,14 +164,13 @@ func DeleteAPIKey(ctx context.Context, uid, keyID string) error {
 		return err
 	}
 
-	// Get the key hash so we can delete the lookup record
 	out, err := c.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(TableName),
 		Key: map[string]types.AttributeValue{
-			"uid": &types.AttributeValueMemberS{Value: uid},
-			"sk":  &types.AttributeValueMemberS{Value: "apikey#" + keyID},
+			"pk": &types.AttributeValueMemberS{Value: UserPK(uid)},
+			"sk": &types.AttributeValueMemberS{Value: APIKeySK(keyID)},
 		},
-		ProjectionExpression: aws.String("KeyHash"),
+		ProjectionExpression: aws.String("keyHash"),
 	})
 	if err != nil {
 		return fmt.Errorf("get key for delete: %w", err)
@@ -183,11 +179,11 @@ func DeleteAPIKey(ctx context.Context, uid, keyID string) error {
 		return nil
 	}
 
-	hash, ok := out.Item["KeyHash"].(*types.AttributeValueMemberS)
+	hash, ok := out.Item["keyHash"].(*types.AttributeValueMemberS)
 	if !ok {
 		return nil
 	}
-	lookupPK := apikeyLookupPK(hash.Value)
+	lookupPK := APIKeyLookupPK(hash.Value)
 
 	_, err = c.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
 		TransactItems: []types.TransactWriteItem{
@@ -195,8 +191,8 @@ func DeleteAPIKey(ctx context.Context, uid, keyID string) error {
 				Delete: &types.Delete{
 					TableName: aws.String(TableName),
 					Key: map[string]types.AttributeValue{
-						"uid": &types.AttributeValueMemberS{Value: uid},
-						"sk":  &types.AttributeValueMemberS{Value: "apikey#" + keyID},
+						"pk": &types.AttributeValueMemberS{Value: UserPK(uid)},
+						"sk": &types.AttributeValueMemberS{Value: APIKeySK(keyID)},
 					},
 				},
 			},
@@ -204,8 +200,8 @@ func DeleteAPIKey(ctx context.Context, uid, keyID string) error {
 				Delete: &types.Delete{
 					TableName: aws.String(TableName),
 					Key: map[string]types.AttributeValue{
-						"uid": &types.AttributeValueMemberS{Value: lookupPK},
-						"sk":  &types.AttributeValueMemberS{Value: lookupPK},
+						"pk": &types.AttributeValueMemberS{Value: lookupPK},
+						"sk": &types.AttributeValueMemberS{Value: lookupPK},
 					},
 				},
 			},

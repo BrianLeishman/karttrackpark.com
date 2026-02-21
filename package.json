@@ -6,9 +6,8 @@
     "build": "pnpm -C site build",
     "lint": "pnpm -C site lint",
     "lint:fix": "pnpm -C site lint:fix",
-    "deploy:api": "AWS_PROFILE=justlog bash scripts/deploy-api.sh",
-    "deploy:mcp": "AWS_PROFILE=justlog bash scripts/deploy-mcp.sh",
-    "deploy:site": "AWS_PROFILE=justlog bash scripts/deploy-site.sh",
-    "deploy:all": "pnpm deploy:api && pnpm deploy:mcp && pnpm deploy:site"
+    "deploy:api": "AWS_PROFILE=ktp bash scripts/deploy-api.sh",
+    "deploy:site": "AWS_PROFILE=ktp bash scripts/deploy-site.sh",
+    "deploy:all": "pnpm deploy:api && pnpm deploy:site"
   }
 }

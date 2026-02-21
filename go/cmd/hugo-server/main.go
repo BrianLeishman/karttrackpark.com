@@ -33,7 +33,7 @@ func main() {
 	// Start Hugo server
 	cmd := exec.Command("hugo", "server",
 		"--bind=0.0.0.0",
-		"-p", "1313",
+		"-p", "25566",
 		"--disableFastRender",
 		"--logLevel", "info",
 		"--minify",

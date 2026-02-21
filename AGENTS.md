@@ -1,19 +1,19 @@
-# JustLog — Development Guide
+# Kart Track Park — Development Guide
 
-This document is the canonical reference for how JustLog is built. It covers architecture, patterns, and conventions across the entire stack. AI agents working on this codebase should follow the patterns described here.
+This document is the canonical reference for how Kart Track Park is built. It covers architecture, patterns, and conventions across the entire stack. AI agents working on this codebase should follow the patterns described here.
 
 ## Project Overview
 
-JustLog is a calorie, macro, and weight tracking service. There is no app UI for data entry — users interact through AI assistants via the MCP server. The web frontend is for account management, dashboards, and settings.
+Kart Track Park is a go-kart track information and community site.
 
 **Philosophy:** Minimal dependencies. Pure Bootstrap, pure Go, pure TypeScript. Every technology choice should be idiomatic to the tool itself — no unnecessary abstractions, wrappers, or frameworks.
 
-**AWS Profile:** All AWS operations use `AWS_PROFILE=justlog`. Set this in your shell or prefix commands with it. Never use the default profile — that points to a different account.
+**AWS Profile:** All AWS operations use `AWS_PROFILE=ktp`. Set this in your shell or prefix commands with it. Never use the default profile — that points to a different account.
 
 ## Directory Structure
 
 ```
-justlog.io/
+karttrackpark.com/
 ├── site/                        # Hugo frontend
 │   ├── config/_default/
 │   │   └── hugo.toml
@@ -32,33 +32,27 @@ justlog.io/
 │   ├── package.json
 │   └── tsconfig.json
 ├── go/
-│   ├── api/                     # HTTP handler library
-│   │   ├── http.go
-│   │   ├── response.go
-│   │   ├── decode.go
-│   │   └── status.go
 │   ├── cmd/
 │   │   ├── compile-ts/          # esbuild Go wrapper
-│   │   ├── hugo-server/         # Dev server (esbuild watch + hugo)
-│   │   └── deploy-site/         # Hugo build → S3 → CloudFront KVS
+│   │   └── hugo-server/         # Dev server (esbuild watch + hugo)
 │   ├── lambda/
-│   │   ├── api/                 # REST API
-│   │   │   ├── main.go
-│   │   │   ├── router.go
-│   │   │   ├── context.go
-│   │   │   └── entries.go
-│   │   └── mcp/                 # MCP server
-│   │       ├── main.go
-│   │       ├── auth.go
-│   │       └── tools/
-│   │           ├── register.go
-│   │           ├── food.go
-│   │           ├── exercise.go
-│   │           └── weight.go
-│   └── dynamo/                  # DynamoDB helpers
-├── aws/
-│   └── cloudfront/
-│       └── funcs/               # CloudFront Functions
+│   │   └── api/                 # REST API
+│   │       ├── main.go          # Route registration, CORS, Lambda/local entrypoint
+│   │       ├── auth.go          # requireAuth(), requireTrackRole()
+│   │       ├── tracks.go        # Track + layout handlers
+│   │       ├── invites.go       # Invite + member handlers
+│   │       ├── sessions.go      # Session + lap handlers
+│   │       └── upload.go        # Presigned S3 upload URL handler
+│   └── dynamo/                  # DynamoDB data access layer
+│       ├── client.go            # DynamoDB client singleton (table: "ktp")
+│       ├── keys.go              # PK/SK/GSI key builders
+│       ├── update.go            # Reusable update expression builder
+│       ├── apikey.go            # API key create/lookup/delete
+│       ├── user.go              # User profile CRUD
+│       ├── track.go             # Track, member, invite, layout CRUD
+│       ├── session.go           # Session CRUD
+│       ├── lap.go               # Lap CRUD + leaderboard queries
+│       └── kart.go              # Kart CRUD (minimal)
 ├── go.mod
 ├── go.sum
 ├── AGENTS.md
@@ -161,137 +155,61 @@ All assets are fingerprinted for cache busting and include SRI integrity attribu
 
 ### Handler Pattern
 
-The API is a pure Go HTTP server. No frameworks — no gin, no chi, no echo.
+The API is a pure Go HTTP server using stdlib `net/http`. No frameworks.
 
-Every handler has the same signature:
-
-```go
-func handleSomething(ctx context.Context) error
-```
-
-The HTTP request and response writer are stored in the context. Handlers never touch `http.ResponseWriter` or `*http.Request` directly. Instead they use the `go/api/` library:
+Handlers use the standard signature:
 
 ```go
-// Reading input
-api.BodyInto(ctx, &dest)     // JSON request body → struct (with validation)
-api.QueryInto(ctx, &dest)    // Query params → struct
-api.PathInto(ctx, &dest)     // Path params like {id} → struct
-
-// Writing output
-api.JSON(ctx, http.StatusOK, data)   // Send JSON response
-api.String(ctx, http.StatusOK, msg)  // Send plain text
-api.Header(ctx, "X-Custom", "val")   // Set response header
+func handleSomething(w http.ResponseWriter, r *http.Request)
 ```
 
-Input parsing uses struct tags (`json`, `form`, `uri`) with automatic validation. Handlers return errors — the middleware decides the HTTP status code.
+Helpers `writeJSON(w, status, v)` and `writeError(w, status, msg)` handle JSON responses.
 
-### Route Registration
+### Authentication
 
-Routes are registered with options:
+Auth uses API keys only (no Cognito yet). The `requireAuth(r)` helper extracts Bearer token → `dynamo.LookupAPIKey` → returns userId. The `requireTrackRole(r, trackID, uid, roles...)` helper checks membership + role.
 
-```go
-func init() {
-    registerRoute("GET /entries", handleEntriesGet, withAuth())
-    registerRoute("POST /entries", handleEntryCreate, withAuth())
-    registerRoute("DELETE /entries/{id}", handleEntryDelete, withAuth())
-}
+### Route Table
+
+Routes are registered in `main.go` using Go 1.22+ method-based patterns:
+
+```
+POST   /api/tracks                      — create track (becomes owner)
+GET    /api/tracks                      — list my tracks
+GET    /api/tracks/{id}                 — track detail
+PUT    /api/tracks/{id}                 — update track
+POST   /api/tracks/{id}/layouts         — create layout
+GET    /api/tracks/{id}/layouts         — list layouts
+POST   /api/tracks/{id}/invites         — invite by email + role
+GET    /api/tracks/{id}/invites         — list pending invites
+DELETE /api/tracks/{id}/invites/{email} — revoke invite
+GET    /api/tracks/{id}/members         — list members
+GET    /api/invites                     — my pending invites
+POST   /api/invites/{trackId}/accept    — accept invite
+POST   /api/upload-url                  — presigned S3 PUT URL
+GET    /api/sessions                    — list my sessions
+GET    /api/sessions/{id}               — session detail + laps
+GET    /api/sessions/{id}/laps/{lapNo}  — single lap
 ```
 
-Route options:
-- `withAuth()` — require authenticated Cognito user
-- `withTimeout(d)` — override default request timeout
+### DynamoDB Schema
 
-### Middleware
-
-The `wrapHandler()` function is the middleware chain. It wraps every handler:
-
-1. Creates request context with request ID, structured logger, DynamoDB client
-2. Authenticates the user via Cognito JWT (if `withAuth()` is set)
-3. Stores the user in context (lazy-loaded — only fetched when accessed)
-4. Calls the handler
-5. Maps returned errors to HTTP status codes:
-   - `errs.ErrBadRequest` → 400
-   - `errs.ErrForbidden` → 403
-   - `errs.ErrNotFound` → 404
-   - Untyped errors → 500
-6. Recovers from panics
+Single-table design with `pk`/`sk` keys, two GSIs (`gsi1`, `gsi2`), and TTL. Prefix-based keys: `USER#`, `TRACK#`, `SESSION#`, `KART#`, `APIKEY#`. See `go/dynamo/keys.go` for all key builders.
 
 ### Dual-Mode Entry Point
 
 The API runs as a Lambda function in production or as a local HTTP server in development:
 
 ```go
-func main() {
-    if os.Getenv("AWS_EXECUTION_ENV") != "" {
-        lambda.Start(handleLambdaEvent)
-    } else {
-        http.ListenAndServe(":8090", handler)
-    }
-}
-```
-
-Lambda events are API Gateway proxy requests. The handler converts them to standard `http.Request`/`http.ResponseWriter` via `httpadapter`.
-
-## MCP Server
-
-The MCP server uses `mark3labs/mcp-go` with Streamable HTTP transport (per the 2025-06-18 MCP specification). SSE is not supported.
-
-### Tool Registration
-
-Tools are registered using a Spec pattern:
-
-```go
-tools.Register(func(s *tools.Spec) {
-    s.Define("log_food",
-        mcp.WithDescription("Log a food entry with calories and macros"),
-        mcp.WithObjectSchema(/* input schema */),
-    )
-    s.Handler(func(ctx context.Context, request json.RawMessage) (*server.ToolResult, error) {
-        // Parse input, write to DynamoDB, return confirmation
-    })
-})
-```
-
-Each tool definition lives in its own file under `tools/` — `food.go`, `exercise.go`, `weight.go`.
-
-### Authentication
-
-The MCP server extracts the Bearer token from the Authorization header, verifies it against Cognito, and stores the authenticated user in context. All tool handlers can access the user from context.
-
-### Dual-Mode
-
-Same pattern as the API — Lambda in production, local HTTP server in development:
-
-```go
-if os.Getenv("AWS_EXECUTION_ENV") != "" {
-    // Lambda: stateless, streaming disabled (API Gateway limitation)
-    server.WithStateLess(true)
-    server.WithDisableStreaming(true)
-    lambda.Start(lambdaHandler)
+if os.Getenv("AWS_LAMBDA_FUNCTION_NAME") != "" {
+    adapter := httpadapter.NewV2(handler)
+    lambda.Start(adapter.ProxyWithContext)
 } else {
-    httpSrv.Start(":8088")
+    http.ListenAndServe(":25565", handler)
 }
 ```
 
-## Database
-
-DynamoDB. Single-table or minimal-table design.
-
-- Partition key: `userID`
-- Sort key: `type#timestamp` or similar composite key
-- All data isolated per user — no cross-user queries
-- GSIs as needed for date range queries or type filtering
-
-DynamoDB helpers live in `go/dynamo/`.
-
-## Authentication
-
-AWS Cognito user pool with Google sign-in. No custom auth system.
-
-- Users authenticate via Cognito hosted UI or Google OAuth
-- API and MCP both validate Cognito JWT bearer tokens
-- Each user's data is isolated — you can only access your own entries
-- Never expose or echo auth tokens in responses
+Lambda events are API Gateway v2 proxy requests converted via `httpadapter`.
 
 ## Deployment
 
@@ -305,95 +223,12 @@ zip -r9q lambda.zip bootstrap
 aws lambda update-function-code --function-name <name> --zip-file fileb://lambda.zip
 ```
 
-Deploy scripts live alongside each Lambda function. The API is served via API Gateway.
+Deploy scripts are in `scripts/`. The API is served via API Gateway.
 
 ### Hugo Site
 
 The site deploys to S3 and is served via CloudFront:
 
 1. **Build**: Hugo builds the site to `public/` with minification
-2. **Upload**: Files sync to S3 under a unique directory (`prod/{randomId}/`)
-   - HTML files: `Cache-Control: public,max-age=0,s-maxage=0,must-revalidate`
-   - Fingerprinted assets: `Cache-Control: public,max-age=31536000,immutable`
-3. **Switch**: CloudFront KVS key is updated to point to the new directory
-
-A CloudFront Function runs on every viewer request, reads the active origin path from KVS, and rewrites the request to the correct S3 directory. This gives zero-downtime blue-green deployments — the old version stays in S3 until the next deploy.
-
-The deploy command lives at `go/cmd/deploy-site/`.
-
-## Agent Behavior
-
-This section is for AI agents (Claude, ChatGPT, etc.) that interact with the JustLog MCP server on behalf of a user.
-
-### Architecture
-
-The MCP server stores numbers and text. The AI does the thinking. The server is the database. You are the application.
-
-### Data Model
-
-JustLog tracks three things:
-
-**Food intake** — calories, protein (g), carbs (g), fat (g), fiber (g), and a text description.
-
-**Exercise** — calories burned and a text description.
-
-**Weight** — body weight in pounds.
-
-All entries are timestamped. The description is freeform text and should capture what the user actually said, not a normalized version. This matters for future queries — six months from now the user might ask "how often did I eat Publix chicken tenders" and you need the original language.
-
-### Estimating Food Intake
-
-When a user describes what they ate, estimate the macros and log them.
-
-**Use web search when you can.** Chain restaurants publish nutrition info. Look it up — don't guess when the data exists.
-
-**For home-cooked or ambiguous meals, estimate reasonably.** Consistent reasonable estimates are more valuable than sporadic precise ones.
-
-**Work from components.** Break meals into parts. Estimate each component and sum.
-
-**Ask clarifying questions only when it matters.** "I had a sandwich" needs more detail. "I had a turkey sandwich on wheat with lettuce and mustard" is enough.
-
-**Default to realistic portions.** A bowl of rice is about 1.5 cups cooked (~300 cal), not a label serving of 0.75 cups.
-
-**Round to reasonable precision.** Log 350, not 347. Protein of 23g is fine.
-
-### Estimating Exercise Calories
-
-**Body weight matters.** Use the user's most recent logged weight.
-
-**Use MET values.** Calories burned = MET x weight in kg x duration in hours. Walking at 3.0 mph flat is ~3.5 METs. At 12% incline it's closer to 8-9 METs.
-
-**Estimate strength training conservatively.** Roughly 3-6 cal/min depending on intensity and rest.
-
-**Log gross calories**, not net above resting.
-
-### Logging Weight
-
-Just the number in pounds and a timestamp. If given in kg, convert (multiply by 2.205). Don't comment on daily fluctuations unless asked.
-
-### Querying and Reporting
-
-**Daily summaries** total calories in, macros, calories out, and note if weight was logged.
-
-**Weekly/monthly trends** focus on averages. Average daily calories, average protein, weight trend direction.
-
-**Be honest about gaps.** If the user didn't log for three days, say so.
-
-**Descriptions are searchable.** "How many times did I eat pizza this month" works because original language is preserved.
-
-### General Behavior
-
-- Log immediately when the user provides information. Don't ask "would you like me to log that?" — just do it and confirm what you logged.
-- Batch multiple tool calls when logging food + exercise in one message.
-- Confirm with actual numbers: "Logged: 850 cal, 45g protein, 90g carbs, 32g fat — Publix 3-tender meal with roll, wedges, and onion rings."
-- Don't lecture about nutrition unless asked.
-
-### Protocol Notes
-
-Streamable HTTP transport (2025-06-18 MCP specification). SSE is not supported.
-
-Tools use `inputSchema` for parameter validation and `outputSchema` for typed return values. Use `structuredContent` for programmatic access, fall back to `content` text blocks for display.
-
-Tool calls should be idempotent where possible — the server handles deduplication by timestamp.
-
-All tools require authentication via bearer token. Never expose or echo auth tokens.
+2. **Upload**: Files sync to S3
+3. **Invalidate**: CloudFront cache is invalidated

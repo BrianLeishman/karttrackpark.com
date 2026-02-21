@@ -1,7 +1,7 @@
 [build]
 cmd = "go build -o ./tmp/api ./go/lambda/api/"
 bin = "./tmp/api"
-full_bin = "AWS_PROFILE=justlog ./tmp/api 2>&1 | tee ./tmp/api.log"
+full_bin = "AWS_PROFILE=ktp ./tmp/api 2>&1 | tee ./tmp/api.log"
 watch_dir = "go"
 include_ext = ["go"]
 exclude_dir = ["tmp", "site", "aws", "node_modules"]

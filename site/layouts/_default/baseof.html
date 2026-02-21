@@ -3,12 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ block "title" . }}{{ if .IsHome }}{{ .Site.Title }} — Track Calories & Macros With Your AI Assistant{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}{{ end }}</title>
-    <meta name="description" content="{{ .Site.Params.description | default "Track calories, macros, exercise, and weight through your AI assistant. No app needed — just talk." }}">
+    <title>{{ block "title" . }}{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}{{ end }}</title>
+    <meta name="description" content="{{ .Site.Params.description | default "Kart Track Park" }}">
     <meta name="api-base" content="{{ .Site.Params.apiBase }}">
+    <meta name="cognito-domain" content="{{ .Site.Params.cognitoDomain }}">
+    <meta name="cognito-client-id" content="{{ .Site.Params.cognitoClientId }}">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <meta property="og:title" content="{{ if .IsHome }}{{ .Site.Title }} — Track Calories & Macros With Your AI Assistant{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}">
-    <meta property="og:description" content="Track calories, macros, exercise, and weight through your AI assistant. No app needed — just talk.">
+    <meta property="og:title" content="{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}">
+    <meta property="og:description" content="Kart Track Park">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ .Permalink }}">
 
@@ -62,7 +64,10 @@
 <body class="d-flex flex-column min-vh-100">
     <nav class="navbar navbar-expand-lg bg-body-tertiary">
         <div class="container">
-            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/"><img src="/favicon.svg" alt="" width="24" height="24">{{ .Site.Title }}</a>
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="/logo.svg" alt="{{ .Site.Title }}" height="40" class="logo-light">
+                <img src="/logo-dark.svg" alt="{{ .Site.Title }}" height="40" class="logo-dark">
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -79,9 +84,6 @@
                             <li><button class="dropdown-item d-flex align-items-center gap-2" data-bs-theme-value="auto"><i class="fa-solid fa-circle-half-stroke fa-fw"></i> Auto</button></li>
                         </ul>
                     </div>
-                    <a href="https://github.com/BrianLeishman/justlog.io" class="text-body-secondary" aria-label="GitHub" target="_blank" rel="noopener">
-                        <i class="fa-brands fa-github fa-lg"></i>
-                    </a>
                     <div id="auth"></div>
                 </div>
             </div>
@@ -94,14 +96,12 @@
 
     <footer class="container py-4 mt-auto border-top">
         <div class="d-flex flex-wrap justify-content-between align-items-center text-body-secondary small">
-            <span>&copy; {{ now.Year }} JustLog</span>
+            <span>&copy; {{ now.Year }} Kart Track Park</span>
             <div class="d-flex gap-3">
                 <a href="/terms/" class="text-body-secondary text-decoration-none">Terms</a>
                 <a href="/privacy/" class="text-body-secondary text-decoration-none">Privacy</a>
-                <a href="/setup/chatgpt/" class="text-body-secondary text-decoration-none">ChatGPT Setup</a>
-                <a href="/setup/claude/" class="text-body-secondary text-decoration-none">Claude Setup</a>
                 <a href="/support/" class="text-body-secondary text-decoration-none">Support</a>
-                <a href="https://github.com/BrianLeishman/justlog.io" class="text-body-secondary text-decoration-none" target="_blank" rel="noopener">GitHub</a>
+                <a href="https://github.com/BrianLeishman/karttrackpark.com" class="text-body-secondary text-decoration-none" target="_blank" rel="noopener">GitHub</a>
             </div>
         </div>
     </footer>
