@@ -70,9 +70,9 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
 
         try {
             // Upload new logo if selected
-            const file = bindings.logoInput.files?.[0];
-            if (file) {
-                fields.logoKey = await uploadAsset(file);
+            const logo = bindings.croppedBlob ?? bindings.logoInput.files?.[0];
+            if (logo) {
+                fields.logoKey = await uploadAsset(logo);
             }
 
             await api.put(`/api/tracks/${trackId}`, fields);

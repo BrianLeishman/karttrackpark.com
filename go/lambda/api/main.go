@@ -56,10 +56,44 @@ func main() {
 	mux.HandleFunc("PUT /api/events/{id}", handleUpdateEvent)
 	mux.HandleFunc("DELETE /api/events/{id}", handleDeleteEvent)
 
+	// Championships
+	mux.HandleFunc("POST /api/tracks/{id}/championships", handleCreateChampionship)
+	mux.HandleFunc("GET /api/tracks/{id}/championships", handleListChampionshipsForTrack)
+	mux.HandleFunc("GET /api/championships/{id}", handleGetChampionship)
+	mux.HandleFunc("PUT /api/championships/{id}", handleUpdateChampionship)
+	mux.HandleFunc("DELETE /api/championships/{id}", handleDeleteChampionship)
+
+	// Series
+	mux.HandleFunc("POST /api/championships/{id}/series", handleCreateSeries)
+	mux.HandleFunc("GET /api/championships/{id}/series", handleListSeriesForChampionship)
+	mux.HandleFunc("GET /api/series/{id}", handleGetSeries)
+	mux.HandleFunc("PUT /api/series/{id}", handleUpdateSeries)
+	mux.HandleFunc("DELETE /api/series/{id}", handleDeleteSeries)
+
+	// Series Events
+	mux.HandleFunc("POST /api/series/{id}/events", handleAddEventToSeries)
+	mux.HandleFunc("GET /api/series/{id}/events", handleListSeriesEvents)
+	mux.HandleFunc("DELETE /api/series/{id}/events/{eventId}", handleRemoveEventFromSeries)
+
+	// Series Drivers
+	mux.HandleFunc("POST /api/series/{id}/drivers", handleEnrollDriver)
+	mux.HandleFunc("GET /api/series/{id}/drivers", handleListSeriesDrivers)
+	mux.HandleFunc("PUT /api/series/{id}/drivers/{uid}", handleUpdateSeriesDriver)
+	mux.HandleFunc("DELETE /api/series/{id}/drivers/{uid}", handleDeleteSeriesDriver)
+
+	// Event Sessions
+	mux.HandleFunc("POST /api/events/{id}/sessions", handleCreateEventSession)
+	mux.HandleFunc("GET /api/events/{id}/sessions", handleListEventSessions)
+
 	// Sessions
 	mux.HandleFunc("GET /api/sessions", handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", handleGetSession)
 	mux.HandleFunc("GET /api/sessions/{id}/laps/{lapNo}", handleGetLap)
+
+	// Results
+	mux.HandleFunc("POST /api/sessions/{id}/results", handlePostResult)
+	mux.HandleFunc("GET /api/sessions/{id}/results", handleListResults)
+	mux.HandleFunc("DELETE /api/sessions/{id}/results/{uid}", handleDeleteResult)
 
 	handler := cors(mux)
 

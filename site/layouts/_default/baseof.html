@@ -29,6 +29,8 @@
     {{ $iti := resources.Get "node_modules/intl-tel-input/build/css/intlTelInput.min.css" | resources.Copy "css/intl-tel-input.css" | fingerprint }}
     <link rel="stylesheet" href="{{ $iti.RelPermalink }}" integrity="{{ $iti.Data.Integrity }}">
     <style>:root{--iti-path-flags-1x:url('/iti/flags.webp');--iti-path-flags-2x:url('/iti/flags@2x.webp')}.iti{display:block}</style>
+    {{ $cropper := resources.Get "node_modules/cropperjs/dist/cropper.min.css" | resources.Copy "css/cropper.css" | fingerprint }}
+    <link rel="stylesheet" href="{{ $cropper.RelPermalink }}" integrity="{{ $cropper.Data.Integrity }}">
     {{ block "head" . }}{{ end }}
     <script>
     (() => {

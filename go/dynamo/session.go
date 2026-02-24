@@ -21,7 +21,10 @@ type Session struct {
 	UID         string `dynamodbav:"uid" json:"uid"`
 	SessionType string `dynamodbav:"sessionType,omitempty" json:"session_type,omitempty"`
 	KartClass   string `dynamodbav:"kartClass,omitempty" json:"kart_class,omitempty"`
-	Notes       string `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
+	EventID      string `dynamodbav:"eventId,omitempty" json:"event_id,omitempty"`
+	SessionOrder int    `dynamodbav:"sessionOrder,omitempty" json:"session_order,omitempty"`
+	SessionName  string `dynamodbav:"sessionName,omitempty" json:"session_name,omitempty"`
+	Notes        string `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
 	LapCount    int    `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
 	BestLapMs   int64  `dynamodbav:"bestLapMs,omitempty" json:"best_lap_ms,omitempty"`
 	GSI1PK      string `dynamodbav:"gsi1pk,omitempty" json:"-"`

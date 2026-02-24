@@ -43,10 +43,12 @@ export async function getAssetUploadUrl(filename: string, contentType: string): 
     return data;
 }
 
-export async function uploadAsset(file: File): Promise<string> {
-    const { upload_url: uploadUrl, key } = await getAssetUploadUrl(file.name, file.type);
-    await axios.put(uploadUrl, file, {
-        headers: { 'Content-Type': file.type },
+export async function uploadAsset(fileOrBlob: File | Blob): Promise<string> {
+    const name = fileOrBlob instanceof File ? fileOrBlob.name : 'logo.webp';
+    const contentType = fileOrBlob.type || 'image/webp';
+    const { upload_url: uploadUrl, key } = await getAssetUploadUrl(name, contentType);
+    await axios.put(uploadUrl, fileOrBlob, {
+        headers: { 'Content-Type': contentType },
     });
     return key;
 }
@@ -183,8 +185,8 @@ export async function renderMyTracks(container: HTMLElement): Promise<void> {
 
         try {
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guaranteed by collectTrackFields with logoRequired: true
-            const file = bindings.logoInput.files![0];
-            const logoKey = await uploadAsset(file);
+            const logo = bindings.croppedBlob ?? bindings.logoInput.files![0];
+            const logoKey = await uploadAsset(logo);
             fields.logo_key = logoKey;
 
             const track = await createTrack(fields as Parameters<typeof createTrack>[0]);

@@ -1,7 +1,11 @@
 import 'bootstrap';
 import { handleCallback, getUser, login, logout } from './auth';
+import { renderChampionshipDetail } from './championship-detail';
+import { renderChampionshipEdit } from './championship-edit';
 import { renderEvents } from './events';
 import { renderKeys } from './keys';
+import { renderSeriesDetail } from './series-detail';
+import { renderSeriesEdit } from './series-edit';
 import { renderTrackDetail } from './track-detail';
 import { renderTrackEdit } from './track-edit';
 import { renderMyTracks } from './tracks';
@@ -10,6 +14,8 @@ const pages: Record<string, (el: HTMLElement) => Promise<void>> = {
     'keys': renderKeys,
     'my-tracks': renderMyTracks,
     'track-edit': renderTrackEdit,
+    'championship-edit': renderChampionshipEdit,
+    'series-edit': renderSeriesEdit,
 };
 
 async function init(): Promise<void> {
@@ -31,6 +37,16 @@ async function init(): Promise<void> {
     const trackDetail = document.getElementById('track-detail');
     if (trackDetail) {
         void renderTrackDetail(trackDetail);
+    }
+
+    const championshipDetail = document.getElementById('championship-detail');
+    if (championshipDetail) {
+        void renderChampionshipDetail(championshipDetail);
+    }
+
+    const seriesDetail = document.getElementById('series-detail');
+    if (seriesDetail) {
+        void renderSeriesDetail(seriesDetail);
     }
 
     // Render auth state in navbar
@@ -88,7 +104,7 @@ async function init(): Promise<void> {
         for (const id of Object.keys(pages)) {
             const el = document.getElementById(id);
             if (el) {
-                const labels: Record<string, string> = { 'keys': 'API keys', 'my-tracks': 'tracks', 'track-edit': 'track settings' };
+                const labels: Record<string, string> = { 'keys': 'API keys', 'my-tracks': 'tracks', 'track-edit': 'track settings', 'championship-edit': 'championship settings', 'series-edit': 'series settings' };
                 const label = labels[id] ?? id;
                 el.innerHTML = `
                     <div class="text-center py-5">

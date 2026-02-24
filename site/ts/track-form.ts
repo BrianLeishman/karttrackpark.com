@@ -1,4 +1,5 @@
 import type { Iti } from 'intl-tel-input';
+import { showCropModal } from './crop-modal';
 import { initPhoneInput } from './phone-input';
 import { timezoneOptions } from './tracks';
 
@@ -35,6 +36,7 @@ export interface TrackFormBindings {
     iti: Iti;
     logoInput: HTMLInputElement;
     logoPreview: HTMLElement;
+    croppedBlob: Blob | null;
 }
 
 function escAttr(s: string): string {
@@ -152,11 +154,26 @@ export function bindTrackForm(prefix: string, phone?: string): TrackFormBindings
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- element is in the template
     const logoPreview = document.getElementById(`${p}-logo-preview`)!;
     logoPreview.addEventListener('click', () => logoInput.click());
-    logoInput.addEventListener('change', () => {
+
+    let croppedBlob: Blob | null = null;
+    logoInput.addEventListener('change', async () => {
         const file = logoInput.files?.[0];
-        if (file) {
+        if (!file) return;
+
+        if (file.type === 'image/svg+xml') {
+            croppedBlob = null;
             const url = URL.createObjectURL(file);
             logoPreview.innerHTML = `<img src="${url}" alt="Preview" style="width:100%;height:100%;object-fit:cover">`;
+            return;
+        }
+
+        const blob = await showCropModal(file);
+        if (blob) {
+            croppedBlob = blob;
+            const url = URL.createObjectURL(blob);
+            logoPreview.innerHTML = `<img src="${url}" alt="Preview" style="width:100%;height:100%;object-fit:cover">`;
+        } else {
+            logoInput.value = '';
         }
     });
 
@@ -172,7 +189,11 @@ export function bindTrackForm(prefix: string, phone?: string): TrackFormBindings
         socialFieldsEl.addEventListener('hide.bs.collapse', () => socialChevron.classList.replace('fa-chevron-down', 'fa-chevron-right'));
     }
 
-    return { iti, logoInput, logoPreview };
+    return {
+        iti, logoInput, logoPreview,
+        get croppedBlob() { return croppedBlob; },
+        set croppedBlob(v: Blob | null) { croppedBlob = v; },
+    };
 }
 
 /**

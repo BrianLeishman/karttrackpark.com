@@ -10,7 +10,8 @@ func UserPK(uid string) string         { return "USER#" + uid }
 func TrackPK(id string) string         { return "TRACK#" + id }
 func SessionPK(id string) string       { return "SESSION#" + id }
 func KartPK(id string) string          { return "KART#" + id }
-func EventPK(id string) string         { return "EVENT#" + id }
+func EventPK(id string) string          { return "EVENT#" + id }
+func ChampionshipPK(id string) string   { return "CHAMPIONSHIP#" + id }
 func APIKeyLookupPK(hash string) string { return "APIKEY#" + hash }
 
 // GSI1 keys for global event timeline
@@ -24,6 +25,13 @@ func InviteSK(email string) string  { return "INVITE#" + strings.ToLower(email) 
 func LayoutSK(id string) string     { return "LAYOUT#" + id }
 func LapSK(lapNo int) string        { return fmt.Sprintf("LAP#%06d", lapNo) }
 func APIKeySK(keyID string) string   { return "APIKEY#" + keyID }
+
+// Series / Result sort keys
+func SeriesPK(id string) string             { return "SERIES#" + id }
+func SeriesEventSK(eventID string) string   { return "EVENT#" + eventID }
+func SeriesDriverSK(uid string) string      { return "DRIVER#" + uid }
+func EventSessionSK(sessionID string) string { return "SESSION#" + sessionID }
+func ResultSK(uid string) string           { return "RESULT#" + uid }
 
 // GSI1 keys for email lookup
 func EmailGSI1PK(email string) string { return "EMAIL#" + strings.ToLower(email) }

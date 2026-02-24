@@ -183,7 +183,12 @@ func handleGetTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, track)
+	type trackWithRole struct {
+		dynamo.Track
+		Role string `json:"role"`
+	}
+
+	writeJSON(w, http.StatusOK, trackWithRole{Track: *track, Role: member.Role})
 }
 
 func handleUpdateTrack(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,12 @@
 import axios from 'axios';
+import { Modal } from 'bootstrap';
 import { parsePhoneNumberWithError } from 'libphonenumber-js';
+import { api } from './api';
 import { getAccessToken } from './auth';
+import { championshipDetailUrl } from './championship-detail';
+import { championshipFormHtml, bindChampionshipForm } from './championship-form';
+import type { ChampionshipFormBindings } from './championship-form';
+import { uploadAsset } from './tracks';
 
 interface TrackPublic {
     track_id: string;
@@ -19,6 +25,10 @@ interface TrackPublic {
     created_at: string;
 }
 
+interface TrackAuth {
+    role: string;
+}
+
 interface TrackEvent {
     event_id: string;
     track_id: string;
@@ -34,6 +44,13 @@ interface TrackEvent {
 interface EventsResponse {
     upcoming: TrackEvent[];
     recent: TrackEvent[];
+}
+
+interface Championship {
+    championship_id: string;
+    name: string;
+    description?: string;
+    logo_key?: string;
 }
 
 const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content
@@ -152,6 +169,10 @@ function emptyState(message: string): string {
     return `<div class="col-12"><p class="text-body-secondary text-center py-3">${message}</p></div>`;
 }
 
+function esc(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export async function renderTrackDetail(container: HTMLElement): Promise<void> {
     const trackId = getTrackId();
     if (!trackId) {
@@ -163,25 +184,28 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
 
     let track: TrackPublic;
     let events: EventsResponse;
-    let isMember = false;
+    let championships: Championship[] = [];
+    let role: string | null = null;
 
     // Check membership in parallel (silently fails if not logged in or not a member)
     const token = getAccessToken();
     const membershipCheck = token
-        ? axios.get(`${apiBase}/api/tracks/${trackId}`, {
+        ? axios.get<TrackAuth>(`${apiBase}/api/tracks/${trackId}`, {
             headers: { Authorization: `Bearer ${token}` },
-        }).then(() => true, () => false)
-        : Promise.resolve(false);
+        }).then(resp => resp.data.role, () => null as string | null)
+        : Promise.resolve(null as string | null);
 
     try {
-        const [trackResp, eventsResp, memberResult] = await Promise.all([
+        const [trackResp, eventsResp, champsResp, memberResult] = await Promise.all([
             axios.get<TrackPublic>(`${apiBase}/api/tracks/${trackId}/public`),
             axios.get<EventsResponse>(`${apiBase}/api/events?track_id=${trackId}`),
+            axios.get<Championship[]>(`${apiBase}/api/tracks/${trackId}/championships`).catch(() => ({ data: [] as Championship[] })),
             membershipCheck,
         ]);
         track = trackResp.data;
         events = eventsResp.data;
-        isMember = memberResult;
+        championships = champsResp.data;
+        role = memberResult;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 404) {
             container.innerHTML = '<div class="alert alert-warning">Track not found.</div>';
@@ -194,6 +218,9 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
     if (ensureCorrectSlug(track)) {
         return;
     }
+
+    const isMember = !!role;
+    const canManage = role === 'owner' || role === 'admin';
 
     document.title = `${track.name} \u2014 Kart Track Park`;
 
@@ -220,6 +247,27 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         ? events.recent.map(eventCard).join('')
         : emptyState('No recent events.');
 
+    const showChampSection = championships.length > 0 || canManage;
+    const champCards = championships.length > 0
+        ? championships.map(c => `
+            <div class="col-md-6 col-lg-4">
+                <a href="${championshipDetailUrl(c.championship_id, c.name)}" class="text-decoration-none">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                ${c.logo_key
+                                    ? `<img src="${assetsBase}/${c.logo_key}" alt="" width="32" height="32" class="rounded flex-shrink-0" style="object-fit:cover">`
+                                    : '<i class="fa-solid fa-trophy text-warning-emphasis" style="font-size:.9rem"></i>'
+                                }
+                                <h5 class="card-title mb-0">${esc(c.name)}</h5>
+                            </div>
+                            ${c.description ? `<p class="card-text text-body-secondary small mb-0">${esc(c.description)}</p>` : ''}
+                        </div>
+                    </div>
+                </a>
+            </div>`).join('')
+        : emptyState('No championships yet.');
+
     container.innerHTML = `
         <div class="d-flex align-items-start gap-3 mb-4">
             ${logoUrl
@@ -229,15 +277,94 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <h1 class="mb-0">${track.name}</h1>
-                    ${isMember ? `<a href="/my/tracks/edit/?id=${track.track_id}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-gear me-1"></i>Manage</a>` : ''}
+                    ${isMember ? `<a href="/my/tracks/edit/?id=${track.track_id}" class="btn btn-sm btn-outline-secondary"><i class="fa-solid fa-gear me-1"></i>Settings</a>` : ''}
                 </div>
                 ${location ? `<p class="text-body-secondary mb-1"><i class="fa-solid fa-location-dot me-1"></i>${location}</p>` : ''}
                 ${contactItems.length > 0 ? `<div class="d-flex flex-wrap gap-3">${contactItems.join('')}</div>` : ''}
                 ${socialLinks(track)}
             </div>
         </div>
+        ${showChampSection ? `
+        <div class="d-flex align-items-center mb-3">
+            <h2 class="mb-0">Championships</h2>
+            ${canManage ? '<button class="btn btn-sm btn-primary ms-auto" id="new-champ-btn"><i class="fa-solid fa-plus me-1"></i>New</button>' : ''}
+        </div>
+        <div class="row g-3 mb-5">${champCards}</div>
+        ` : ''}
         <h2 class="mb-3">Upcoming Events</h2>
         <div class="row g-3 mb-5">${upcomingCards}</div>
         <h2 class="mb-3">Recent Events</h2>
         <div class="row g-3">${recentCards}</div>`;
+
+    // New Championship modal handler
+    document.getElementById('new-champ-btn')?.addEventListener('click', () => {
+        showNewChampModal(trackId, async () => {
+            await renderTrackDetail(container);
+        });
+    });
+}
+
+function showNewChampModal(trackId: string, onSave: () => Promise<void>): void {
+    document.getElementById('modal-container')?.remove();
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="modal fade" id="modal-container" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">New Championship</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        ${championshipFormHtml({ prefix: 'new' })}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="champ-submit">Create</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `);
+
+    const modalEl = document.getElementById('modal-container')!;
+    const bsModal = new Modal(modalEl);
+    const bindings: ChampionshipFormBindings = bindChampionshipForm('new');
+    bsModal.show();
+    modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+
+    modalEl.addEventListener('shown.bs.modal', () => {
+        (document.getElementById('new-name') as HTMLInputElement).focus();
+    }, { once: true });
+
+    document.getElementById('champ-submit')!.addEventListener('click', async () => {
+        const nameInput = document.getElementById('new-name') as HTMLInputElement;
+        const name = nameInput.value.trim();
+        if (!name) {
+            nameInput.classList.add('is-invalid');
+            return;
+        }
+
+        const btn = document.getElementById('champ-submit') as HTMLButtonElement;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating\u2026';
+
+        try {
+            const body: Record<string, string> = {
+                name,
+                description: (document.getElementById('new-desc') as HTMLTextAreaElement).value.trim(),
+            };
+
+            const logo = bindings.croppedBlob ?? bindings.logoInput.files?.[0];
+            if (logo) {
+                body.logo_key = await uploadAsset(logo);
+            }
+
+            await api.post(`/api/tracks/${trackId}/championships`, body);
+            bsModal.hide();
+            await onSave();
+        } catch {
+            btn.disabled = false;
+            btn.textContent = 'Create';
+        }
+    });
 }
