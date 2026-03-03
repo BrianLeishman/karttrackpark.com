@@ -63,6 +63,13 @@ func main() {
 	mux.HandleFunc("PUT /api/championships/{id}", handleUpdateChampionship)
 	mux.HandleFunc("DELETE /api/championships/{id}", handleDeleteChampionship)
 
+	// Formats
+	mux.HandleFunc("POST /api/tracks/{id}/formats", handleCreateFormat)
+	mux.HandleFunc("GET /api/tracks/{id}/formats", handleListFormatsForTrack)
+	mux.HandleFunc("GET /api/formats/{id}", handleGetFormat)
+	mux.HandleFunc("PUT /api/formats/{id}", handleUpdateFormat)
+	mux.HandleFunc("DELETE /api/formats/{id}", handleDeleteFormat)
+
 	// Series
 	mux.HandleFunc("POST /api/championships/{id}/series", handleCreateSeries)
 	mux.HandleFunc("GET /api/championships/{id}/series", handleListSeriesForChampionship)
@@ -119,7 +126,7 @@ func cors(next http.Handler) http.Handler {
 	})
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)

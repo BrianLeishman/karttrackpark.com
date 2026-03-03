@@ -67,7 +67,7 @@ func handleGetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"session": session,
 		"laps":    laps,
 	})

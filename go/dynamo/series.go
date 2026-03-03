@@ -110,7 +110,7 @@ func GetSeries(ctx context.Context, seriesID string) (*Series, error) {
 	return &s, nil
 }
 
-func UpdateSeries(ctx context.Context, seriesID string, fields map[string]interface{}) error {
+func UpdateSeries(ctx context.Context, seriesID string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}
@@ -305,7 +305,7 @@ func GetSeriesDriver(ctx context.Context, seriesID, uid string) (*SeriesDriver, 
 }
 
 // UpdateSeriesDriver updates mutable fields on a driver enrollment.
-func UpdateSeriesDriver(ctx context.Context, seriesID, uid string, fields map[string]interface{}) error {
+func UpdateSeriesDriver(ctx context.Context, seriesID, uid string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}

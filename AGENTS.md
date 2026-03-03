@@ -2,6 +2,46 @@
 
 This document is the canonical reference for how Kart Track Park is built. It covers architecture, patterns, and conventions across the entire stack. AI agents working on this codebase should follow the patterns described here.
 
+## CRITICAL — TypeScript Rules
+
+These rules are **non-negotiable**. Violations will be rejected.
+
+- **ESLint directives are NOT allowed.** Never use `eslint-disable`, `eslint-disable-next-line`, `eslint-disable-line`, or any other eslint directive comment. If ESLint flags your code, fix the code properly.
+- **`as` type assertions are NOT allowed.** They mean you're fighting the compiler. Use proper type narrowing instead: `instanceof`, null checks (`if (!el) return`), `typeof`, `in` operator. The only acceptable `as` is `as const`.
+- **Non-null assertions (`!`) are NOT allowed.** Use null checks or optional chaining (`?.`).
+
+### Correct patterns
+
+```typescript
+// DOM elements — null check
+const el = document.getElementById('my-id');
+if (!el) return;
+el.addEventListener('click', handler);
+
+// Specific element types — instanceof
+const input = document.getElementById('my-input');
+if (!(input instanceof HTMLInputElement)) return;
+input.value = 'foo';
+
+// Nullable properties — optional chaining or check
+const files = input.files;
+if (!files || files.length === 0) return;
+files[0]; // safe
+
+// Nested nullable — optional chaining
+btn.dataset.lat ?? '';
+wrap?.style.display;
+```
+
+### Wrong patterns (never do these)
+
+```typescript
+document.getElementById('x')!              // non-null assertion
+document.getElementById('x') as HTMLElement // type assertion
+el!.addEventListener(...)                   // non-null assertion
+(foo as SomeType).bar                      // type assertion
+```
+
 ## Project Overview
 
 Kart Track Park is a go-kart track information and community site.

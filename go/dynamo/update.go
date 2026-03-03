@@ -8,7 +8,7 @@ import (
 )
 
 // BuildUpdateExpression builds a DynamoDB SET update expression from a map of fields.
-func BuildUpdateExpression(fields map[string]interface{}) (string, map[string]string, map[string]types.AttributeValue, error) {
+func BuildUpdateExpression(fields map[string]any) (string, map[string]string, map[string]types.AttributeValue, error) {
 	if len(fields) == 0 {
 		return "", nil, nil, fmt.Errorf("no fields to update")
 	}

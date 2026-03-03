@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { getAccessToken, clearTokens } from './auth';
 
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content
-    ?? 'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
+const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
+    'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
 
 export const api = axios.create({
     baseURL: apiBase,
@@ -21,7 +21,7 @@ api.interceptors.response.use(
     error => {
         if (!axios.isAxiosError(error) || !error.response) {
             showError('Network error. Check your connection.');
-            return Promise.reject(error as Error);
+            return Promise.reject(error);
         }
 
         const status = error.response.status;
@@ -35,7 +35,7 @@ api.interceptors.response.use(
             showError(`Request failed: ${message}`);
         }
 
-        return Promise.reject(error as Error);
+        return Promise.reject(error);
     },
 );
 

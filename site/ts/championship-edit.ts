@@ -45,21 +45,28 @@ export async function renderChampionshipEdit(container: HTMLElement): Promise<vo
     const bindings: ChampionshipFormBindings = bindChampionshipForm('edit');
 
     document.getElementById('save-champ-btn')?.addEventListener('click', async () => {
-        const nameInput = document.getElementById('edit-name') as HTMLInputElement;
+        const nameInput = document.getElementById('edit-name');
+        if (!(nameInput instanceof HTMLInputElement)) {
+            return;
+        }
         const name = nameInput.value.trim();
         if (!name) {
             nameInput.classList.add('is-invalid');
             return;
         }
 
-        const btn = document.getElementById('save-champ-btn') as HTMLButtonElement;
+        const btn = document.getElementById('save-champ-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving\u2026';
 
         try {
+            const descEl = document.getElementById('edit-desc');
             const body: Record<string, string> = {
                 name,
-                description: (document.getElementById('edit-desc') as HTMLTextAreaElement).value.trim(),
+                description: descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : '',
             };
 
             const logo = bindings.croppedBlob ?? bindings.logoInput.files?.[0];

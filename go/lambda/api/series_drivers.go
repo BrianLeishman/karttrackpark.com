@@ -110,7 +110,7 @@ func handleUpdateSeriesDriver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
@@ -120,7 +120,7 @@ func handleUpdateSeriesDriver(w http.ResponseWriter, r *http.Request) {
 		"driverName": true, "seeded": true, "relegationProtected": true,
 		"totalPoints": true, "weeklyScores": true, "droppedRound": true,
 	}
-	fields := map[string]interface{}{}
+	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
 			fields[k] = v

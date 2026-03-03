@@ -1,13 +1,23 @@
 {
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "pnpm -C site dev",
     "dev:api": "pnpm -C site dev:api",
     "build": "pnpm -C site build",
-    "lint": "pnpm -C site lint",
-    "lint:fix": "pnpm -C site lint:fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "deploy:api": "AWS_PROFILE=ktp bash scripts/deploy-api.sh",
     "deploy:site": "AWS_PROFILE=ktp bash scripts/deploy-site.sh",
     "deploy:all": "pnpm deploy:api && pnpm deploy:site"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.9.0",
+    "@typescript-eslint/utils": "^8.56.1",
+    "eslint": "^10.0.2",
+    "globals": "^17.4.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.56.1"
   }
 }

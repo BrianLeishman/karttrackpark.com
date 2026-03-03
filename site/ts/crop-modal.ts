@@ -22,7 +22,10 @@ function padToSquare(img: HTMLImageElement): string {
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        return canvas.toDataURL('image/png');
+    }
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, size, size);
     const x = (size - img.naturalWidth) / 2;
@@ -41,7 +44,7 @@ export async function showCropModal(file: File): Promise<Blob | null> {
     const squareDataUrl = padToSquare(img);
     URL.revokeObjectURL(img.src);
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         document.getElementById('crop-modal')?.remove();
 
         document.body.insertAdjacentHTML('beforeend', `
@@ -68,8 +71,16 @@ export async function showCropModal(file: File): Promise<Blob | null> {
             </div>
         `);
 
-        const modalEl = document.getElementById('crop-modal')!;
-        const imgEl = document.getElementById('crop-image') as HTMLImageElement;
+        const modalEl = document.getElementById('crop-modal');
+        if (!modalEl) {
+            resolve(null);
+            return;
+        }
+        const imgEl = document.getElementById('crop-image');
+        if (!(imgEl instanceof HTMLImageElement)) {
+            resolve(null);
+            return;
+        }
         const bsModal = new Modal(modalEl);
         let cropper: Cropper | null = null;
         let settled = false;
@@ -89,22 +100,27 @@ export async function showCropModal(file: File): Promise<Blob | null> {
             });
         }, { once: true });
 
-        document.getElementById('crop-confirm')!.addEventListener('click', () => {
-            if (!cropper) return;
+        const cropConfirmEl = document.getElementById('crop-confirm');
+        if (cropConfirmEl) {
+            cropConfirmEl.addEventListener('click', () => {
+                if (!cropper) {
+                    return;
+                }
 
-            const canvas = cropper.getCroppedCanvas({
-                width: 512,
-                height: 512,
-                fillColor: '#fff',
-                imageSmoothingQuality: 'high',
+                const canvas = cropper.getCroppedCanvas({
+                    width: 512,
+                    height: 512,
+                    fillColor: '#fff',
+                    imageSmoothingQuality: 'high',
+                });
+
+                canvas.toBlob(blob => {
+                    settled = true;
+                    bsModal.hide();
+                    resolve(blob);
+                }, 'image/webp', 0.9);
             });
-
-            canvas.toBlob((blob) => {
-                settled = true;
-                bsModal.hide();
-                resolve(blob);
-            }, 'image/webp', 0.9);
-        });
+        }
 
         modalEl.addEventListener('hidden.bs.modal', () => {
             cropper?.destroy();

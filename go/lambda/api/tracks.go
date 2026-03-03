@@ -205,15 +205,15 @@ func handleUpdateTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 
 	// Only allow updating safe fields
-	allowed := map[string]bool{"name": true, "logoKey": true, "email": true, "phone": true, "city": true, "state": true, "timezone": true, "website": true, "facebook": true, "instagram": true, "youtube": true, "tiktok": true}
-	fields := map[string]interface{}{}
+	allowed := map[string]bool{"name": true, "logoKey": true, "email": true, "phone": true, "city": true, "state": true, "timezone": true, "website": true, "facebook": true, "instagram": true, "youtube": true, "tiktok": true, "trackOutline": true, "mapBounds": true}
+	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
 			fields[k] = v

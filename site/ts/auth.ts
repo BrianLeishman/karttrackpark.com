@@ -51,7 +51,18 @@ export function getUser(): { email: string; name: string; picture: string } | nu
         return null;
     }
     try {
-        return JSON.parse(raw) as { email: string; name: string; picture: string };
+        const parsed: unknown = JSON.parse(raw);
+        if (typeof parsed !== 'object' || parsed === null) {
+            return null;
+        }
+        if (!('email' in parsed) || !('name' in parsed) || !('picture' in parsed)) {
+            return null;
+        }
+        const { email, name, picture } = parsed;
+        if (typeof email !== 'string' || typeof name !== 'string' || typeof picture !== 'string') {
+            return null;
+        }
+        return { email, name, picture };
     } catch {
         return null;
     }

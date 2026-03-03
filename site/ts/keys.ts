@@ -68,9 +68,9 @@ export async function renderKeys(container: HTMLElement): Promise<void> {
 
     const keys = await fetchAPIKeys();
     keys.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const keyRows = keys.length > 0
-        ? keys.map(renderKeyRow).join('')
-        : '<tr><td colspan="3" class="text-body-secondary">No API keys yet.</td></tr>';
+    const keyRows = keys.length > 0 ?
+        keys.map(renderKeyRow).join('') :
+        '<tr><td colspan="3" class="text-body-secondary">No API keys yet.</td></tr>';
 
     container.innerHTML = `
         <h4>API Keys</h4>
@@ -100,14 +100,19 @@ export async function renderKeys(container: HTMLElement): Promise<void> {
 
 function bindButtons(refresh: () => Promise<void>): void {
     document.getElementById('create-key-btn')?.addEventListener('click', async () => {
-        const input = document.getElementById('new-key-label') as HTMLInputElement | null;
-        const label = input?.value.trim() || '';
+        const input = document.getElementById('new-key-label');
+        const isInput = input instanceof HTMLInputElement;
+        const label = isInput ? input.value.trim() : '';
         if (!label) {
-            input?.classList.add('is-invalid');
-            input?.focus();
+            if (isInput) {
+                input.classList.add('is-invalid');
+                input.focus();
+            }
             return;
         }
-        input?.classList.remove('is-invalid');
+        if (isInput) {
+            input.classList.remove('is-invalid');
+        }
         const result = await createAPIKey(label);
         if (!result) {
             return;
@@ -129,8 +134,8 @@ function bindButtons(refresh: () => Promise<void>): void {
 
     document.getElementById('copy-new-key')?.addEventListener('click', e => {
         const value = document.getElementById('new-key-value');
-        if (value?.textContent) {
-            copyWithFeedback(e.currentTarget as HTMLElement, value.textContent);
+        if (value?.textContent && e.currentTarget instanceof HTMLElement) {
+            copyWithFeedback(e.currentTarget, value.textContent);
         }
     });
 
@@ -140,15 +145,17 @@ function bindButtons(refresh: () => Promise<void>): void {
 
     document.querySelectorAll('.delete-key-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
-            const el = btn as HTMLElement;
-            const keyId = el.dataset.keyId;
+            if (!(btn instanceof HTMLElement)) {
+                return;
+            }
+            const keyId = btn.dataset.keyId;
             if (!keyId) {
                 return;
             }
-            const isSession = el.dataset.isSession === 'true';
-            const msg = isSession
-                ? 'Revoke your current session? You will be logged out.'
-                : 'Revoke this API key? Any integrations using it will stop working.';
+            const isSession = btn.dataset.isSession === 'true';
+            const msg = isSession ?
+                'Revoke your current session? You will be logged out.' :
+                'Revoke this API key? Any integrations using it will stop working.';
             if (!confirm(msg)) {
                 return;
             }

@@ -14,8 +14,10 @@ import (
 	"github.com/rs/xid"
 )
 
-const uploadBucket = "ktp-raw-uploads"
-const assetBucket = "karttrackpark-assets"
+const (
+	uploadBucket = "ktp-raw-uploads"
+	assetBucket  = "karttrackpark-assets"
+)
 
 var s3Client = sync.OnceValues(func() (*s3.Client, error) {
 	cfg, err := config.LoadDefaultConfig(context.Background())

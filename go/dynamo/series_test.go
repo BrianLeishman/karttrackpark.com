@@ -83,7 +83,7 @@ func TestUpdateSeries(t *testing.T) {
 
 	s, _ := CreateSeries(ctx, Series{TrackID: "track1", ChampionshipID: "champ1", Name: "Old Name"})
 
-	if err := UpdateSeries(ctx, s.SeriesID, map[string]interface{}{"name": "New Name"}); err != nil {
+	if err := UpdateSeries(ctx, s.SeriesID, map[string]any{"name": "New Name"}); err != nil {
 		t.Fatalf("UpdateSeries: %v", err)
 	}
 
@@ -139,7 +139,7 @@ func TestUpdateSeries_StatusAndRules(t *testing.T) {
 	ctx := context.Background()
 
 	s, _ := CreateSeries(ctx, Series{TrackID: "t1", ChampionshipID: "c1", Name: "League"})
-	UpdateSeries(ctx, s.SeriesID, map[string]interface{}{"status": "active", "rules": "No contact"})
+	UpdateSeries(ctx, s.SeriesID, map[string]any{"status": "active", "rules": "No contact"})
 
 	got, _ := GetSeries(ctx, s.SeriesID)
 	if got.Status != "active" {
@@ -221,7 +221,7 @@ func TestSeriesDrivers(t *testing.T) {
 	}
 
 	// Update
-	UpdateSeriesDriver(ctx, "series1", "u1", map[string]interface{}{"totalPoints": 42})
+	UpdateSeriesDriver(ctx, "series1", "u1", map[string]any{"totalPoints": 42})
 
 	// List
 	list, err := ListSeriesDrivers(ctx, "series1")

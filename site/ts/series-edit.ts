@@ -66,23 +66,32 @@ export async function renderSeriesEdit(container: HTMLElement): Promise<void> {
     `;
 
     document.getElementById('save-series-btn')?.addEventListener('click', async () => {
-        const nameInput = document.getElementById('series-name') as HTMLInputElement;
+        const nameInput = document.getElementById('series-name');
+        if (!(nameInput instanceof HTMLInputElement)) {
+            return;
+        }
         const name = nameInput.value.trim();
         if (!name) {
             nameInput.classList.add('is-invalid');
             return;
         }
 
-        const btn = document.getElementById('save-series-btn') as HTMLButtonElement;
+        const btn = document.getElementById('save-series-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving\u2026';
 
         try {
+            const descEl = document.getElementById('series-desc');
+            const statusEl = document.getElementById('series-status');
+            const rulesEl = document.getElementById('series-rules');
             await api.put(`/api/series/${seriesId}`, {
                 name,
-                description: (document.getElementById('series-desc') as HTMLTextAreaElement).value.trim(),
-                status: (document.getElementById('series-status') as HTMLSelectElement).value,
-                rules: (document.getElementById('series-rules') as HTMLTextAreaElement).value.trim(),
+                description: descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : '',
+                status: statusEl instanceof HTMLSelectElement ? statusEl.value : 'upcoming',
+                rules: rulesEl instanceof HTMLTextAreaElement ? rulesEl.value.trim() : '',
             });
             window.location.href = seriesDetailUrl(seriesId, name);
         } finally {

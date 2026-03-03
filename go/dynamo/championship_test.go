@@ -67,7 +67,7 @@ func TestUpdateChampionship(t *testing.T) {
 
 	c, _ := CreateChampionship(ctx, Championship{TrackID: "track1", Name: "Old Name"})
 
-	if err := UpdateChampionship(ctx, c.ChampionshipID, map[string]interface{}{"name": "New Name"}); err != nil {
+	if err := UpdateChampionship(ctx, c.ChampionshipID, map[string]any{"name": "New Name"}); err != nil {
 		t.Fatalf("UpdateChampionship: %v", err)
 	}
 

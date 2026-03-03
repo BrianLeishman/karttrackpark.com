@@ -32,7 +32,7 @@ func handleListEvents(w http.ResponseWriter, r *http.Request) {
 		recent = []dynamo.Event{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"upcoming": upcoming,
 		"recent":   recent,
 	})
@@ -145,7 +145,7 @@ func handleUpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
@@ -155,7 +155,7 @@ func handleUpdateEvent(w http.ResponseWriter, r *http.Request) {
 		"name": true, "description": true, "eventType": true,
 		"startTime": true, "endTime": true,
 	}
-	fields := map[string]interface{}{}
+	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
 			fields[k] = v

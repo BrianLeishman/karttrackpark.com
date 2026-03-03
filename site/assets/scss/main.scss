@@ -53,3 +53,13 @@
   .logo-light { display: none; }
 }
 
+// Track hover card popover — wider than Bootstrap's default 276px
+.track-hover-popover {
+  --bs-popover-max-width: 360px;
+}
+
+// Drag-and-drop session reorder indicator
+.format-session-row.drag-over {
+  border-color: var(--bs-primary) !important;
+}
+

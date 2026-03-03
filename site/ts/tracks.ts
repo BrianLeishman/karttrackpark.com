@@ -5,8 +5,8 @@ import { api } from './api';
 import { trackDetailUrl } from './track-detail';
 import { trackFormFieldsHtml, bindTrackForm, collectTrackFields } from './track-form';
 
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content
-    ?? 'https://assets.karttrackpark.com';
+const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
+    'https://assets.karttrackpark.com';
 
 interface Track {
     track_id: string;
@@ -83,9 +83,9 @@ function renderTrackCard(track: Track): string {
             <a href="${trackDetailUrl(track.track_id, track.name)}" class="text-decoration-none text-body">
                 <div class="card h-100">
                     <div class="card-body d-flex align-items-start gap-3">
-                        ${logoUrl
-                            ? `<img src="${logoUrl}" alt="" width="48" height="48" class="rounded flex-shrink-0" style="object-fit:cover">`
-                            : '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:48px;height:48px"><i class="fa-solid fa-flag-checkered text-body-secondary"></i></div>'
+                        ${logoUrl ?
+                            `<img src="${logoUrl}" alt="" width="48" height="48" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                            '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:48px;height:48px"><i class="fa-solid fa-flag-checkered text-body-secondary"></i></div>'
                         }
                         <div class="min-w-0">
                             <h5 class="card-title mb-1">${track.name}</h5>
@@ -132,9 +132,9 @@ export async function renderMyTracks(container: HTMLElement): Promise<void> {
 
     const tracks = await fetchTracks();
 
-    const trackCards = tracks.length > 0
-        ? tracks.map(renderTrackCard).join('')
-        : '';
+    const trackCards = tracks.length > 0 ?
+        tracks.map(renderTrackCard).join('') :
+        '';
 
     container.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -145,9 +145,9 @@ export async function renderMyTracks(container: HTMLElement): Promise<void> {
             This page is for track owners and operators. If you don't own or run a track, you're probably in the wrong place.
             If your track is already on Kart Track Park, ask your track admin or owner to send you an invite.
         </div>
-        ${tracks.length > 0
-            ? `<div class="row g-3">${trackCards}</div>`
-            : '<p class="text-body-secondary">You don\'t have any tracks yet. Create one to get started.</p>'
+        ${tracks.length > 0 ?
+            `<div class="row g-3">${trackCards}</div>` :
+            '<p class="text-body-secondary">You don\'t have any tracks yet. Create one to get started.</p>'
         }
 
         <div class="modal fade" id="create-track-modal" tabindex="-1">
@@ -178,18 +178,43 @@ export async function renderMyTracks(container: HTMLElement): Promise<void> {
             return;
         }
 
-        const btn = document.getElementById('create-track-btn') as HTMLButtonElement;
+        const btn = document.getElementById('create-track-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
         const originalText = btn.textContent;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating\u2026';
 
         try {
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guaranteed by collectTrackFields with logoRequired: true
-            const logo = bindings.croppedBlob ?? bindings.logoInput.files![0];
+            const files = bindings.logoInput.files;
+            if (!bindings.croppedBlob && (!files || files.length === 0)) {
+                return;
+            }
+            const logo = bindings.croppedBlob ?? files?.[0];
+            if (!logo) {
+                return;
+            }
             const logoKey = await uploadAsset(logo);
             fields.logo_key = logoKey;
 
-            const track = await createTrack(fields as Parameters<typeof createTrack>[0]);
+            if (!fields.name || !fields.logo_key || !fields.email || !fields.phone) {
+                return;
+            }
+            const track = await createTrack({
+                name: fields.name,
+                logo_key: fields.logo_key,
+                email: fields.email,
+                phone: fields.phone,
+                city: fields.city,
+                state: fields.state,
+                timezone: fields.timezone,
+                website: fields.website,
+                facebook: fields.facebook,
+                instagram: fields.instagram,
+                youtube: fields.youtube,
+                tiktok: fields.tiktok,
+            });
             if (track) {
                 // Properly dismiss the modal before re-rendering to clean up the backdrop
                 const modalEl = document.getElementById('create-track-modal');

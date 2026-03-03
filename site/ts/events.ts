@@ -45,7 +45,7 @@ function eventCard(event: Event): string {
                 <div class="card-body">
                     <h5 class="card-title">${event.name}</h5>
                     <p class="card-text text-body-secondary small mb-2">
-                        <i class="fa-solid fa-location-dot me-1"></i><a href="${trackDetailUrl(event.track_id, event.track_name)}" class="text-body-secondary">${event.track_name}</a>
+                        <i class="fa-solid fa-location-dot me-1"></i><a href="${trackDetailUrl(event.track_id, event.track_name)}" class="text-body-secondary" data-track-hover="${event.track_id}">${event.track_name}</a>
                     </p>
                     <p class="card-text text-body-secondary small mb-2">
                         <i class="fa-solid fa-clock me-1"></i>${formatDate(event.start_time)}${event.end_time ? ` — ${formatDate(event.end_time)}` : ''}
@@ -73,13 +73,13 @@ export async function renderEvents(container: HTMLElement): Promise<void> {
         return;
     }
 
-    const upcomingCards = data.upcoming.length > 0
-        ? data.upcoming.map(eventCard).join('')
-        : emptyState('No upcoming events.');
+    const upcomingCards = data.upcoming.length > 0 ?
+        data.upcoming.map(eventCard).join('') :
+        emptyState('No upcoming events.');
 
-    const recentCards = data.recent.length > 0
-        ? data.recent.map(eventCard).join('')
-        : emptyState('No recent events.');
+    const recentCards = data.recent.length > 0 ?
+        data.recent.map(eventCard).join('') :
+        emptyState('No recent events.');
 
     container.innerHTML = `
         <h2 class="mb-3">Upcoming Events</h2>

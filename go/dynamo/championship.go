@@ -80,7 +80,7 @@ func GetChampionship(ctx context.Context, championshipID string) (*Championship,
 	return &c, nil
 }
 
-func UpdateChampionship(ctx context.Context, championshipID string, fields map[string]interface{}) error {
+func UpdateChampionship(ctx context.Context, championshipID string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}

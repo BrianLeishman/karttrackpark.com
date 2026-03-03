@@ -83,7 +83,7 @@ func GetEvent(ctx context.Context, eventID string) (*Event, error) {
 	return &e, nil
 }
 
-func UpdateEvent(ctx context.Context, eventID string, fields map[string]interface{}) error {
+func UpdateEvent(ctx context.Context, eventID string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}

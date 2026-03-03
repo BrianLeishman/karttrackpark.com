@@ -98,7 +98,7 @@ func GetUserByEmail(ctx context.Context, email string) (*UserProfile, error) {
 	return &u, nil
 }
 
-func UpdateUser(ctx context.Context, uid string, fields map[string]interface{}) error {
+func UpdateUser(ctx context.Context, uid string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}

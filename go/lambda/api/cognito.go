@@ -117,7 +117,7 @@ func handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	if existing != nil {
 		rawUID = strings.TrimPrefix(existing.UID, "USER#")
 		// Update name/picture if changed
-		updates := map[string]interface{}{}
+		updates := map[string]any{}
 		if claims.Name != "" && claims.Name != existing.Name {
 			updates["name"] = claims.Name
 		}
@@ -152,7 +152,7 @@ func handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"api_key": apiKey,
 		"key_id":  keyID,
 		"user": map[string]string{

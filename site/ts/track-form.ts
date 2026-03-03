@@ -1,10 +1,35 @@
+import L from 'leaflet';
 import type { Iti } from 'intl-tel-input';
 import { showCropModal } from './crop-modal';
 import { initPhoneInput } from './phone-input';
 import { timezoneOptions } from './tracks';
 
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content
-    ?? 'https://assets.karttrackpark.com';
+const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
+    'https://assets.karttrackpark.com';
+
+function requireEl(id: string): HTMLElement {
+    const el = document.getElementById(id);
+    if (!el) {
+        throw new Error(`Expected element #${id}`);
+    }
+    return el;
+}
+
+function requireInput(id: string): HTMLInputElement {
+    const el = document.getElementById(id);
+    if (!(el instanceof HTMLInputElement)) {
+        throw new Error(`Expected HTMLInputElement for #${id}`);
+    }
+    return el;
+}
+
+function requireButton(id: string): HTMLButtonElement {
+    const el = document.getElementById(id);
+    if (!(el instanceof HTMLButtonElement)) {
+        throw new Error(`Expected HTMLButtonElement for #${id}`);
+    }
+    return el;
+}
 
 export interface TrackFormValues {
     name?: string;
@@ -19,10 +44,12 @@ export interface TrackFormValues {
     instagram?: string;
     youtube?: string;
     tiktok?: string;
+    track_outline?: string;
+    map_bounds?: string;
 }
 
 interface TrackFormOptions {
-    /** ID prefix for all form elements (e.g. "track" → "track-name", "track-email") */
+    /** ID prefix for all form elements (e.g. "track" -> "track-name", "track-email") */
     prefix: string;
     /** Pre-fill values for edit mode */
     values?: TrackFormValues;
@@ -37,6 +64,8 @@ export interface TrackFormBindings {
     logoInput: HTMLInputElement;
     logoPreview: HTMLElement;
     croppedBlob: Blob | null;
+    outlinePoints: [number, number][];
+    getMapBounds: () => [[number, number], [number, number]];
 }
 
 function escAttr(s: string): string {
@@ -78,14 +107,14 @@ export function trackFormFieldsHtml(opts: TrackFormOptions): string {
             </div>
         </div>`;
 
-    const socialsBlock = opts.collapseSocials
-        ? `<div class="mb-3">
+    const socialsBlock = opts.collapseSocials ?
+        `<div class="mb-3">
             <a class="text-decoration-none small" data-bs-toggle="collapse" href="#${p}-social-fields" role="button" aria-expanded="false">
                 <i class="fa-solid fa-chevron-right me-1" id="${p}-social-chevron"></i>Social Profiles
             </a>
             <div class="collapse mt-2" id="${p}-social-fields">${socialFields}</div>
-        </div>`
-        : `<div class="mb-3">
+        </div>` :
+        `<div class="mb-3">
             <label class="form-label">Social Profiles</label>
             ${socialFields}
         </div>`;
@@ -95,9 +124,9 @@ export function trackFormFieldsHtml(opts: TrackFormOptions): string {
             <label class="form-label" for="${p}-logo">${logoLabel}</label>
             <div class="d-flex align-items-center gap-3">
                 <div id="${p}-logo-preview" class="rounded bg-body-secondary d-flex align-items-center justify-content-center flex-shrink-0" style="width:96px;height:96px;overflow:hidden;cursor:pointer" title="Click to ${logoUrl ? 'change' : 'choose'} logo">
-                    ${logoUrl
-                        ? `<img src="${logoUrl}" alt="Logo" style="width:100%;height:100%;object-fit:cover">`
-                        : '<i class="fa-solid fa-image fa-2x text-body-secondary"></i>'
+                    ${logoUrl ?
+                        `<img src="${logoUrl}" alt="Logo" style="width:100%;height:100%;object-fit:cover">` :
+                        '<i class="fa-solid fa-image fa-2x text-body-secondary"></i>'
                     }
                 </div>
                 <div>
@@ -139,26 +168,45 @@ export function trackFormFieldsHtml(opts: TrackFormOptions): string {
             <label class="form-label" for="${p}-website">Website</label>
             <input type="url" class="form-control" id="${p}-website" value="${escAttr(v.website ?? '')}" placeholder="https://example.com">
         </div>
-        ${socialsBlock}`;
+        ${socialsBlock}
+        <div class="mb-3">
+            <label class="form-label">Location &amp; Track Outline</label>
+            <div class="position-relative mb-2">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" class="form-control" id="${p}-map-search" placeholder="Search for a location\u2026" autocomplete="off">
+                </div>
+                <div id="${p}-map-search-results" class="dropdown-menu w-100 overflow-auto" style="max-height:240px"></div>
+            </div>
+            <div id="${p}-map" style="aspect-ratio:1/1;border-radius:.375rem;z-index:0"></div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="${p}-map-draw"><i class="fa-solid fa-draw-polygon me-1"></i>Draw Outline</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="${p}-map-undo" disabled><i class="fa-solid fa-rotate-left me-1"></i>Undo</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="${p}-map-fit" disabled><i class="fa-solid fa-expand me-1"></i>Fit to Outline</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="${p}-map-clear-outline" disabled><i class="fa-solid fa-eraser me-1"></i>Clear Outline</button>
+            </div>
+            <div class="form-text" id="${p}-map-hint">Pan and zoom the map to frame the track. The visible area will be saved. Use Draw Outline to trace the track shape.</div>
+        </div>`;
 }
 
 /**
  * Bind interactive behaviors after the form HTML is in the DOM.
  * Returns handles needed by collectTrackFields.
  */
-export function bindTrackForm(prefix: string, phone?: string): TrackFormBindings {
+export function bindTrackForm(prefix: string, phone?: string, mapValues?: { track_outline?: string; map_bounds?: string }): TrackFormBindings {
     const p = prefix;
 
     // Logo preview click-to-upload
-    const logoInput = document.getElementById(`${p}-logo`) as HTMLInputElement;
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- element is in the template
-    const logoPreview = document.getElementById(`${p}-logo-preview`)!;
+    const logoInput = requireInput(`${p}-logo`);
+    const logoPreview = requireEl(`${p}-logo-preview`);
     logoPreview.addEventListener('click', () => logoInput.click());
 
     let croppedBlob: Blob | null = null;
     logoInput.addEventListener('change', async () => {
         const file = logoInput.files?.[0];
-        if (!file) return;
+        if (!file) {
+            return;
+        }
 
         if (file.type === 'image/svg+xml') {
             croppedBlob = null;
@@ -178,8 +226,8 @@ export function bindTrackForm(prefix: string, phone?: string): TrackFormBindings
     });
 
     // Phone input with country picker
-    const phoneInput = document.getElementById(`${p}-phone`) as HTMLInputElement;
-    const iti = initPhoneInput(phoneInput, phone);
+    const phoneInputEl = requireInput(`${p}-phone`);
+    const iti = initPhoneInput(phoneInputEl, phone);
 
     // Social section chevron rotation (only present when collapseSocials is true)
     const socialFieldsEl = document.getElementById(`${p}-social-fields`);
@@ -189,10 +237,251 @@ export function bindTrackForm(prefix: string, phone?: string): TrackFormBindings
         socialFieldsEl.addEventListener('hide.bs.collapse', () => socialChevron.classList.replace('fa-chevron-down', 'fa-chevron-right'));
     }
 
+    // --- Leaflet map ---
+    const outlinePoints: [number, number][] = [];
+
+    const mapEl = requireEl(`${p}-map`);
+    const drawBtn = requireButton(`${p}-map-draw`);
+    const undoBtn = requireButton(`${p}-map-undo`);
+    const fitBtn = requireButton(`${p}-map-fit`);
+    const clearOutlineBtn = requireButton(`${p}-map-clear-outline`);
+    const hintEl = requireEl(`${p}-map-hint`);
+
+    // Pre-fill map values
+    const initOutline = mapValues?.track_outline ?? '';
+    const initBounds = mapValues?.map_bounds ?? '';
+
+    // Parse saved bounds: JSON string "[[south,west],[north,east]]"
+    let savedBounds: L.LatLngBoundsExpression | null = null;
+    if (initBounds) {
+        try {
+            const parsed: unknown = JSON.parse(initBounds);
+            if (Array.isArray(parsed) && parsed.length === 2 &&
+                Array.isArray(parsed[0]) && Array.isArray(parsed[1])) {
+                savedBounds = [[Number(parsed[0][0]), Number(parsed[0][1])], [Number(parsed[1][0]), Number(parsed[1][1])]];
+            }
+        } catch { /* ignore */ }
+    }
+
+    const map = L.map(mapEl, { scrollWheelZoom: true, zoomSnap: 0.25, zoomDelta: 0.25, wheelDebounceTime: 100 });
+    if (savedBounds) {
+        map.fitBounds(savedBounds);
+    } else {
+        map.setView([39.8, -98.5], 4);
+    }
+
+    const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+    });
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '&copy; Esri',
+        maxZoom: 19,
+    });
+    const labelsOverlay = L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner-labels/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        opacity: 0.7,
+    });
+    const roadsOverlay = L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/toner-lines/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        opacity: 0.4,
+    });
+    // Default: hybrid (satellite + roads + labels)
+    satelliteLayer.addTo(map);
+    labelsOverlay.addTo(map);
+    roadsOverlay.addTo(map);
+    L.control.layers(
+        { 'Hybrid': satelliteLayer, 'Street': osmLayer },
+        { 'Roads': roadsOverlay, 'Labels': labelsOverlay },
+        { position: 'topright' },
+    ).addTo(map);
+    // When switching to street view, remove overlays; when switching back, re-add them
+    map.on('baselayerchange', (e: L.LayersControlEvent) => {
+        if (e.name === 'Street') {
+            map.removeLayer(roadsOverlay);
+            map.removeLayer(labelsOverlay);
+        } else {
+            roadsOverlay.addTo(map);
+            labelsOverlay.addTo(map);
+        }
+    });
+
+    let polyline: L.Polyline | null = null;
+    let drawing = false;
+
+    function updateButtons() {
+        drawBtn.classList.toggle('active', drawing);
+        undoBtn.disabled = outlinePoints.length === 0;
+        fitBtn.disabled = outlinePoints.length < 2;
+        clearOutlineBtn.disabled = outlinePoints.length === 0;
+        if (drawing) {
+            hintEl.textContent = 'Click the map to add outline points. Use Undo to remove the last point.';
+        } else {
+            hintEl.textContent = 'Pan and zoom the map to frame the track. The visible area will be saved. Use Draw Outline to trace the track shape.';
+        }
+        mapEl.style.cursor = drawing ? 'crosshair' : '';
+    }
+
+    function redrawPolyline() {
+        if (polyline) {
+            map.removeLayer(polyline);
+            polyline = null;
+        }
+        if (outlinePoints.length >= 2) {
+            polyline = L.polyline(outlinePoints, { color: '#0d6efd', weight: 3 }).addTo(map);
+        }
+    }
+
+    // Pre-fill existing outline (GeoJSON LineString: coordinates are [lng, lat])
+    if (initOutline) {
+        try {
+            const geojson: unknown = JSON.parse(initOutline);
+            const geo = typeof geojson === 'object' && geojson !== null && 'geometry' in geojson ? geojson.geometry : undefined;
+            const rawCoords = typeof geo === 'object' && geo !== null && 'coordinates' in geo ? geo.coordinates : undefined;
+            const coords: unknown[] = Array.isArray(rawCoords) ? rawCoords : [];
+            for (const c of coords) {
+                if (Array.isArray(c) && c.length >= 2) {
+                    outlinePoints.push([Number(c[1]), Number(c[0])]);
+                }
+            }
+            redrawPolyline();
+        } catch { /* ignore bad JSON */ }
+    }
+
+    drawBtn.addEventListener('click', () => {
+        drawing = !drawing;
+        updateButtons();
+    });
+
+    undoBtn.addEventListener('click', () => {
+        outlinePoints.pop();
+        redrawPolyline();
+        updateButtons();
+    });
+
+    fitBtn.addEventListener('click', () => {
+        if (outlinePoints.length >= 2) {
+            map.fitBounds(L.latLngBounds(outlinePoints), { padding: [30, 30] });
+        }
+    });
+
+    clearOutlineBtn.addEventListener('click', () => {
+        outlinePoints.length = 0;
+        redrawPolyline();
+        updateButtons();
+    });
+
+    map.on('click', (e: L.LeafletMouseEvent) => {
+        if (drawing) {
+            outlinePoints.push([e.latlng.lat, e.latlng.lng]);
+            redrawPolyline();
+            updateButtons();
+        }
+    });
+
+    // --- Geocoding search (Nominatim) ---
+    const searchInput = requireInput(`${p}-map-search`);
+    const searchResults = requireEl(`${p}-map-search-results`);
+    let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+    function hideResults() {
+        searchResults.classList.remove('show');
+        searchResults.innerHTML = '';
+    }
+
+    searchInput.addEventListener('input', () => {
+        if (searchDebounce) {
+            clearTimeout(searchDebounce);
+        }
+        const q = searchInput.value.trim();
+        if (q.length < 3) {
+            hideResults();
+            return;
+        }
+        searchDebounce = setTimeout(async () => {
+            try {
+                const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`);
+                const raw: unknown = await resp.json();
+                if (!Array.isArray(raw)) {
+                    hideResults();
+                    return;
+                }
+                if (searchInput.value.trim() !== q) {
+                    return;
+                } // stale
+                if (raw.length === 0) {
+                    hideResults();
+                    return;
+                }
+                interface NominatimResult {
+                    display_name: string; lat: string; lon: string; 
+                }
+                const data: NominatimResult[] = raw.filter(
+                    (r: unknown): r is NominatimResult =>
+                        typeof r === 'object' && r !== null &&
+                        'display_name' in r && 'lat' in r && 'lon' in r,
+                );
+                searchResults.innerHTML = data.map(r =>
+                    `<button type="button" class="dropdown-item text-wrap" data-lat="${r.lat}" data-lon="${r.lon}">${r.display_name}</button>`,
+                ).join('');
+                searchResults.classList.add('show');
+            } catch {
+                hideResults();
+            }
+        }, 350);
+    });
+
+    searchResults.addEventListener('click', e => {
+        if (!(e.target instanceof HTMLElement)) {
+            return;
+        }
+        const btn = e.target.closest<HTMLElement>('[data-lat]');
+        if (!btn) {
+            return;
+        }
+        const lat = btn.dataset.lat;
+        const lng = btn.dataset.lon;
+        if (!lat || !lng) {
+            return;
+        }
+        map.setView([parseFloat(lat), parseFloat(lng)], 16);
+        hideResults();
+        searchInput.value = '';
+    });
+
+    // Close results when clicking elsewhere
+    document.addEventListener('click', e => {
+        if (!(e.target instanceof HTMLElement)) {
+            return;
+        }
+        if (!e.target.closest(`#${p}-map-search, #${p}-map-search-results`)) {
+            hideResults();
+        }
+    });
+
+    updateButtons();
+
+    // Force a resize after the map container is visible (handles tab/collapse timing)
+    setTimeout(() => map.invalidateSize(), 200);
+
     return {
-        iti, logoInput, logoPreview,
-        get croppedBlob() { return croppedBlob; },
-        set croppedBlob(v: Blob | null) { croppedBlob = v; },
+        iti,
+        logoInput,
+        logoPreview,
+        get croppedBlob() {
+            return croppedBlob;
+        },
+        set croppedBlob(v: Blob | null) {
+            croppedBlob = v;
+        },
+        get outlinePoints() {
+            return outlinePoints;
+        },
+        getMapBounds() {
+            const b = map.getBounds();
+            const result: [[number, number], [number, number]] = [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]];
+            return result;
+        },
     };
 }
 
@@ -201,8 +490,8 @@ export function bindTrackForm(prefix: string, phone?: string): TrackFormBindings
  * Call after bindTrackForm when editing an existing track.
  */
 export function setTrackFormTimezone(prefix: string, tz: string): void {
-    const sel = document.getElementById(`${prefix}-timezone`) as HTMLSelectElement | null;
-    if (sel && tz) {
+    const sel = document.getElementById(`${prefix}-timezone`);
+    if (sel instanceof HTMLSelectElement && tz) {
         sel.value = tz;
     }
 }
@@ -217,9 +506,18 @@ export function collectTrackFields(
     logoRequired: boolean,
 ): Record<string, string> | null {
     const p = prefix;
-    const nameInput = document.getElementById(`${p}-name`) as HTMLInputElement;
-    const emailInput = document.getElementById(`${p}-email`) as HTMLInputElement;
-    const phoneInput = document.getElementById(`${p}-phone`) as HTMLInputElement;
+    const nameInput = document.getElementById(`${p}-name`);
+    if (!(nameInput instanceof HTMLInputElement)) {
+        return null;
+    }
+    const emailInput = document.getElementById(`${p}-email`);
+    if (!(emailInput instanceof HTMLInputElement)) {
+        return null;
+    }
+    const phoneInput = document.getElementById(`${p}-phone`);
+    if (!(phoneInput instanceof HTMLInputElement)) {
+        return null;
+    }
 
     let valid = true;
 
@@ -261,15 +559,26 @@ export function collectTrackFields(
         phone: `tel:${bindings.iti.getNumber()}`,
     };
 
+    const getInputValue = (id: string): string => {
+        const el = document.getElementById(id);
+        if (el instanceof HTMLInputElement) {
+            return el.value.trim();
+        }
+        if (el instanceof HTMLSelectElement) {
+            return el.value;
+        }
+        return '';
+    };
+
     const optionals: [string, string][] = [
-        ['city', (document.getElementById(`${p}-city`) as HTMLInputElement).value.trim()],
-        ['state', (document.getElementById(`${p}-state`) as HTMLInputElement).value.trim().toUpperCase()],
-        ['timezone', (document.getElementById(`${p}-timezone`) as HTMLSelectElement).value],
-        ['website', (document.getElementById(`${p}-website`) as HTMLInputElement).value.trim()],
-        ['facebook', (document.getElementById(`${p}-facebook`) as HTMLInputElement).value.trim()],
-        ['instagram', (document.getElementById(`${p}-instagram`) as HTMLInputElement).value.trim()],
-        ['youtube', (document.getElementById(`${p}-youtube`) as HTMLInputElement).value.trim()],
-        ['tiktok', (document.getElementById(`${p}-tiktok`) as HTMLInputElement).value.trim()],
+        ['city', getInputValue(`${p}-city`)],
+        ['state', getInputValue(`${p}-state`).toUpperCase()],
+        ['timezone', getInputValue(`${p}-timezone`)],
+        ['website', getInputValue(`${p}-website`)],
+        ['facebook', getInputValue(`${p}-facebook`)],
+        ['instagram', getInputValue(`${p}-instagram`)],
+        ['youtube', getInputValue(`${p}-youtube`)],
+        ['tiktok', getInputValue(`${p}-tiktok`)],
     ];
     for (const [key, val] of optionals) {
         if (val) {

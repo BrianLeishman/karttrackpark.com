@@ -18,6 +18,8 @@ interface Track {
     instagram?: string;
     youtube?: string;
     tiktok?: string;
+    track_outline?: string;
+    map_bounds?: string;
     role: string;
     created_at: string;
 }
@@ -51,7 +53,10 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
         </div>
     `;
 
-    const bindings = bindTrackForm('edit', track.phone || undefined);
+    const bindings = bindTrackForm('edit', track.phone || undefined, {
+        track_outline: track.track_outline,
+        map_bounds: track.map_bounds,
+    });
     if (track.timezone) {
         setTrackFormTimezone('edit', track.timezone);
     }
@@ -63,7 +68,10 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
             return;
         }
 
-        const btn = document.getElementById('save-track-btn') as HTMLButtonElement;
+        const btn = document.getElementById('save-track-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
         const originalText = btn.textContent;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving\u2026';
@@ -75,7 +83,26 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
                 fields.logoKey = await uploadAsset(logo);
             }
 
-            await api.put(`/api/tracks/${trackId}`, fields);
+            // Build body — always send map fields so clears are persisted
+            const body: Record<string, unknown> = { ...fields };
+            body.mapBounds = JSON.stringify(bindings.getMapBounds());
+            if (bindings.outlinePoints.length >= 2) {
+                // Close the loop by duplicating the first point at the end
+                const coords = bindings.outlinePoints.map(([lat, lng]) => [lng, lat]);
+                const first = coords[0];
+                const last = coords[coords.length - 1];
+                if (first[0] !== last[0] || first[1] !== last[1]) {
+                    coords.push([...first]);
+                }
+                body.trackOutline = JSON.stringify({
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: coords },
+                });
+            } else {
+                body.trackOutline = '';
+            }
+
+            await api.put(`/api/tracks/${trackId}`, body);
             window.location.href = trackDetailUrl(trackId, fields.name);
         } finally {
             btn.disabled = false;

@@ -32,11 +32,11 @@ interface TrackAuth {
     role: string;
 }
 
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content
-    ?? 'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
+const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
+    'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
 
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content
-    ?? 'https://assets.karttrackpark.com';
+const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
+    'https://assets.karttrackpark.com';
 
 function isHugoServer(): boolean {
     return document.querySelector<HTMLMetaElement>('meta[name="hugo-server"]')?.content === 'true';
@@ -76,7 +76,9 @@ function statusColor(status?: string): string {
 }
 
 function ensureCorrectSlug(champ: Championship): boolean {
-    if (isHugoServer()) return false;
+    if (isHugoServer()) {
+        return false;
+    }
     const expectedSlug = slugify(champ.name);
     const pathParts = window.location.pathname.split('/');
     const currentSlug = pathParts[3] ?? '';
@@ -116,18 +118,20 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
         return;
     }
 
-    if (ensureCorrectSlug(champ)) return;
+    if (ensureCorrectSlug(champ)) {
+        return;
+    }
 
     // Fetch track public + membership (need trackId from championship)
     const token = getAccessToken();
-    const membershipCheck = token
-        ? axios.get<TrackAuth>(`${apiBase}/api/tracks/${champ.track_id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        }).then(resp => resp.data.role, () => null as string | null)
-        : Promise.resolve(null as string | null);
+    const membershipCheck: Promise<string | null> = token ?
+        axios.get<TrackAuth>(`${apiBase}/api/tracks/${champ.track_id}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        }).then(resp => resp.data.role, () => null) :
+        Promise.resolve(null);
 
     let track: TrackPublic;
-    let role: string | null = null;
+    let role: string | null;
 
     try {
         const [trackResp, memberResult] = await Promise.all([
@@ -145,8 +149,8 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
 
     document.title = `${champ.name} \u2014 Kart Track Park`;
 
-    const seriesCards = seriesList.length > 0
-        ? seriesList.map(s => `
+    const seriesCards = seriesList.length > 0 ?
+        seriesList.map(s => `
             <div class="col-md-6 col-lg-4">
                 <a href="${seriesUrl(s.series_id, s.name)}" class="text-decoration-none">
                     <div class="card h-100">
@@ -159,21 +163,21 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
                         </div>
                     </div>
                 </a>
-            </div>`).join('')
-        : '<div class="col-12"><p class="text-body-secondary text-center py-3">No series yet.</p></div>';
+            </div>`).join('') :
+        '<div class="col-12"><p class="text-body-secondary text-center py-3">No series yet.</p></div>';
 
     container.innerHTML = `
-        <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary mb-3">
-            ${track.logo_key
-                ? `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">`
-                : '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
+        <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary mb-3" data-track-hover="${track.track_id}">
+            ${track.logo_key ?
+                `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
             }
             <span>${esc(track.name)}</span>
         </a>
         <div class="d-flex align-items-start gap-3 mb-4">
-            ${champ.logo_key
-                ? `<img src="${assetsBase}/${champ.logo_key}" alt="" width="96" height="96" class="rounded flex-shrink-0" style="object-fit:cover">`
-                : '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:96px;height:96px"><i class="fa-solid fa-trophy fa-2x text-body-secondary"></i></div>'
+            ${champ.logo_key ?
+                `<img src="${assetsBase}/${champ.logo_key}" alt="" width="96" height="96" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:96px;height:96px"><i class="fa-solid fa-trophy fa-2x text-body-secondary"></i></div>'
             }
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
@@ -195,7 +199,9 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
 
     // Delete championship handler
     document.getElementById('delete-champ-btn')?.addEventListener('click', async () => {
-        if (!confirm(`Delete "${champ.name}"? This cannot be undone.`)) return;
+        if (!confirm(`Delete "${champ.name}"? This cannot be undone.`)) {
+            return;
+        }
         try {
             await api.delete(`/api/championships/${champ.championship_id}`);
             window.location.href = trackDetailUrl(track.track_id, track.name);
@@ -253,33 +259,52 @@ function showNewSeriesModal(champId: string, onSave: () => Promise<void>): void 
         </div>
     `);
 
-    const modalEl = document.getElementById('modal-container')!;
+    const modalEl = document.getElementById('modal-container');
+    if (!modalEl) {
+        return;
+    }
     const bsModal = new Modal(modalEl);
     bsModal.show();
     modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
 
     modalEl.addEventListener('shown.bs.modal', () => {
-        (document.getElementById('series-name') as HTMLInputElement).focus();
+        const seriesNameEl = document.getElementById('series-name');
+        if (seriesNameEl instanceof HTMLInputElement) {
+            seriesNameEl.focus();
+        }
     }, { once: true });
 
-    document.getElementById('series-submit')!.addEventListener('click', async () => {
-        const nameInput = document.getElementById('series-name') as HTMLInputElement;
+    const seriesSubmitEl = document.getElementById('series-submit');
+    if (!seriesSubmitEl) {
+        return;
+    }
+    seriesSubmitEl.addEventListener('click', async () => {
+        const nameInput = document.getElementById('series-name');
+        if (!(nameInput instanceof HTMLInputElement)) {
+            return;
+        }
         const name = nameInput.value.trim();
         if (!name) {
             nameInput.classList.add('is-invalid');
             return;
         }
 
-        const btn = document.getElementById('series-submit') as HTMLButtonElement;
+        const btn = document.getElementById('series-submit');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating\u2026';
 
         try {
+            const descEl = document.getElementById('series-desc');
+            const statusEl = document.getElementById('series-status');
+            const rulesEl = document.getElementById('series-rules');
             await api.post(`/api/championships/${champId}/series`, {
                 name,
-                description: (document.getElementById('series-desc') as HTMLTextAreaElement).value.trim(),
-                status: (document.getElementById('series-status') as HTMLSelectElement).value,
-                rules: (document.getElementById('series-rules') as HTMLTextAreaElement).value.trim(),
+                description: descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : '',
+                status: statusEl instanceof HTMLSelectElement ? statusEl.value : 'upcoming',
+                rules: rulesEl instanceof HTMLTextAreaElement ? rulesEl.value.trim() : '',
             });
             bsModal.hide();
             await onSave();

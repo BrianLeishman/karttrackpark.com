@@ -8,6 +8,7 @@ import { renderSeriesDetail } from './series-detail';
 import { renderSeriesEdit } from './series-edit';
 import { renderTrackDetail } from './track-detail';
 import { renderTrackEdit } from './track-edit';
+import { initTrackHoverCards } from './track-hover';
 import { renderMyTracks } from './tracks';
 
 const pages: Record<string, (el: HTMLElement) => Promise<void>> = {
@@ -49,6 +50,9 @@ async function init(): Promise<void> {
         void renderSeriesDetail(seriesDetail);
     }
 
+    // Track hover cards (works for all users, including anonymous)
+    initTrackHoverCards();
+
     // Render auth state in navbar
     const authContainer = document.getElementById('auth');
     if (!authContainer) {
@@ -59,9 +63,9 @@ async function init(): Promise<void> {
     if (user) {
         // Build nav links with user dropdown
         const path = window.location.pathname;
-        const pic = user.picture
-            ? `<img src="${user.picture}" alt="" class="rounded-circle me-1" width="22" height="22" referrerpolicy="no-referrer"> `
-            : '';
+        const pic = user.picture ?
+            `<img src="${user.picture}" alt="" class="rounded-circle me-1" width="22" height="22" referrerpolicy="no-referrer"> ` :
+            '';
         const navLinks = document.getElementById('nav-links');
         if (navLinks) {
             navLinks.innerHTML = `

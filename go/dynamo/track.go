@@ -14,22 +14,24 @@ import (
 )
 
 type Track struct {
-	PK        string `dynamodbav:"pk" json:"-"`
-	SK        string `dynamodbav:"sk" json:"-"`
-	TrackID   string `dynamodbav:"trackId" json:"track_id"`
-	Name      string `dynamodbav:"name" json:"name"`
-	LogoKey   string `dynamodbav:"logoKey" json:"logo_key"`
-	Email     string `dynamodbav:"email" json:"email"`
-	Phone     string `dynamodbav:"phone" json:"phone"`
-	City      string `dynamodbav:"city,omitempty" json:"city,omitempty"`
-	State     string `dynamodbav:"state,omitempty" json:"state,omitempty"`
-	Timezone  string `dynamodbav:"timezone,omitempty" json:"timezone,omitempty"`
-	Website   string `dynamodbav:"website,omitempty" json:"website,omitempty"`
-	Facebook  string `dynamodbav:"facebook,omitempty" json:"facebook,omitempty"`
-	Instagram string `dynamodbav:"instagram,omitempty" json:"instagram,omitempty"`
-	YouTube   string `dynamodbav:"youtube,omitempty" json:"youtube,omitempty"`
-	TikTok    string `dynamodbav:"tiktok,omitempty" json:"tiktok,omitempty"`
-	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
+	PK           string `dynamodbav:"pk" json:"-"`
+	SK           string `dynamodbav:"sk" json:"-"`
+	TrackID      string `dynamodbav:"trackId" json:"track_id"`
+	Name         string `dynamodbav:"name" json:"name"`
+	LogoKey      string `dynamodbav:"logoKey" json:"logo_key"`
+	Email        string `dynamodbav:"email" json:"email"`
+	Phone        string `dynamodbav:"phone" json:"phone"`
+	City         string `dynamodbav:"city,omitempty" json:"city,omitempty"`
+	State        string `dynamodbav:"state,omitempty" json:"state,omitempty"`
+	Timezone     string `dynamodbav:"timezone,omitempty" json:"timezone,omitempty"`
+	Website      string `dynamodbav:"website,omitempty" json:"website,omitempty"`
+	Facebook     string `dynamodbav:"facebook,omitempty" json:"facebook,omitempty"`
+	Instagram    string `dynamodbav:"instagram,omitempty" json:"instagram,omitempty"`
+	YouTube      string `dynamodbav:"youtube,omitempty" json:"youtube,omitempty"`
+	TikTok       string `dynamodbav:"tiktok,omitempty" json:"tiktok,omitempty"`
+	TrackOutline string `dynamodbav:"trackOutline,omitempty" json:"track_outline,omitempty"`
+	MapBounds    string `dynamodbav:"mapBounds,omitempty" json:"map_bounds,omitempty"`
+	CreatedAt    string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 type TrackMember struct {
@@ -136,7 +138,7 @@ func GetTrack(ctx context.Context, trackID string) (*Track, error) {
 	return &t, nil
 }
 
-func UpdateTrack(ctx context.Context, trackID string, fields map[string]interface{}) error {
+func UpdateTrack(ctx context.Context, trackID string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}
