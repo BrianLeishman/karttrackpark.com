@@ -13,23 +13,24 @@ import (
 )
 
 type Session struct {
-	PK           string `dynamodbav:"pk" json:"-"`
-	SK           string `dynamodbav:"sk" json:"-"`
-	SessionID    string `dynamodbav:"sessionId" json:"session_id"`
-	TrackID      string `dynamodbav:"trackId" json:"track_id"`
-	LayoutID     string `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
-	UID          string `dynamodbav:"uid" json:"uid"`
-	SessionType  string `dynamodbav:"sessionType,omitempty" json:"session_type,omitempty"`
-	KartClass    string `dynamodbav:"kartClass,omitempty" json:"kart_class,omitempty"`
-	EventID      string `dynamodbav:"eventId,omitempty" json:"event_id,omitempty"`
-	SessionOrder int    `dynamodbav:"sessionOrder,omitempty" json:"session_order,omitempty"`
-	SessionName  string `dynamodbav:"sessionName,omitempty" json:"session_name,omitempty"`
-	Notes        string `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
-	LapCount     int    `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
-	BestLapMs    int64  `dynamodbav:"bestLapMs,omitempty" json:"best_lap_ms,omitempty"`
-	GSI1PK       string `dynamodbav:"gsi1pk,omitempty" json:"-"`
-	GSI1SK       string `dynamodbav:"gsi1sk,omitempty" json:"-"`
-	CreatedAt    string `dynamodbav:"createdAt" json:"created_at"`
+	PK           string   `dynamodbav:"pk" json:"-"`
+	SK           string   `dynamodbav:"sk" json:"-"`
+	SessionID    string   `dynamodbav:"sessionId" json:"session_id"`
+	TrackID      string   `dynamodbav:"trackId" json:"track_id"`
+	LayoutID     string   `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
+	UID          string   `dynamodbav:"uid" json:"uid"`
+	SessionType  string   `dynamodbav:"sessionType,omitempty" json:"session_type,omitempty"`
+	ClassIDs     []string `dynamodbav:"classIds,omitempty" json:"class_ids,omitempty"`
+	EventID      string   `dynamodbav:"eventId,omitempty" json:"event_id,omitempty"`
+	SessionOrder int      `dynamodbav:"sessionOrder,omitempty" json:"session_order,omitempty"`
+	SessionName  string   `dynamodbav:"sessionName,omitempty" json:"session_name,omitempty"`
+	Reverse      bool     `dynamodbav:"reverse,omitempty" json:"reverse,omitempty"`
+	Notes        string   `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
+	LapCount     int      `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
+	BestLapMs    int64    `dynamodbav:"bestLapMs,omitempty" json:"best_lap_ms,omitempty"`
+	GSI1PK       string   `dynamodbav:"gsi1pk,omitempty" json:"-"`
+	GSI1SK       string   `dynamodbav:"gsi1sk,omitempty" json:"-"`
+	CreatedAt    string   `dynamodbav:"createdAt" json:"created_at"`
 }
 
 func CreateSession(ctx context.Context, s Session) (*Session, error) {

@@ -1,13 +1,14 @@
 import { api } from './api';
 import { getUser } from './auth';
 import { trackDetailUrl } from './track-detail';
-import { trackFormFieldsHtml, bindTrackForm, collectTrackFields, setTrackFormTimezone } from './track-form';
+import { trackFormFieldsHtml, bindTrackForm, collectTrackFields, setTrackFormTimezone, boundsMapHtml, bindBoundsMap } from './track-form';
 import { uploadAsset } from './tracks';
 
 interface Track {
     track_id: string;
     name: string;
     logo_key: string;
+    map_bounds?: string;
     email: string;
     phone: string;
     city?: string;
@@ -18,8 +19,6 @@ interface Track {
     instagram?: string;
     youtube?: string;
     tiktok?: string;
-    track_outline?: string;
-    map_bounds?: string;
     role: string;
     created_at: string;
 }
@@ -46,17 +45,20 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
         <div class="mx-auto" style="max-width:600px">
             <h4 class="mb-4">Edit Track</h4>
             ${trackFormFieldsHtml({ prefix: 'edit', values: track, collapseSocials: false })}
-            <div class="d-flex gap-2">
+            <div class="mb-3">
+                <label class="form-label">Track Location</label>
+                ${boundsMapHtml('edit')}
+            </div>
+            <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-primary" id="save-track-btn">Save</button>
-                <a href="${trackDetailUrl(track.track_id, track.name)}" class="btn btn-secondary">Cancel</a>
+                <a href="${trackDetailUrl(track.track_id, track.name)}" class="btn btn-secondary">Back</a>
+                <span id="save-status" class="ms-1"></span>
             </div>
         </div>
     `;
 
-    const bindings = bindTrackForm('edit', track.phone || undefined, {
-        track_outline: track.track_outline,
-        map_bounds: track.map_bounds,
-    });
+    const bindings = bindTrackForm('edit', track.phone || undefined);
+    const mapBindings = bindBoundsMap('edit', track.map_bounds);
     if (track.timezone) {
         setTrackFormTimezone('edit', track.timezone);
     }
@@ -72,9 +74,10 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
         if (!(btn instanceof HTMLButtonElement)) {
             return;
         }
-        const originalText = btn.textContent;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving\u2026';
+
+        const status = document.getElementById('save-status');
 
         try {
             // Upload new logo if selected
@@ -83,30 +86,26 @@ export async function renderTrackEdit(container: HTMLElement): Promise<void> {
                 fields.logoKey = await uploadAsset(logo);
             }
 
-            // Build body — always send map fields so clears are persisted
-            const body: Record<string, unknown> = { ...fields };
-            body.mapBounds = JSON.stringify(bindings.getMapBounds());
-            if (bindings.outlinePoints.length >= 2) {
-                // Close the loop by duplicating the first point at the end
-                const coords = bindings.outlinePoints.map(([lat, lng]) => [lng, lat]);
-                const first = coords[0];
-                const last = coords[coords.length - 1];
-                if (first[0] !== last[0] || first[1] !== last[1]) {
-                    coords.push([...first]);
-                }
-                body.trackOutline = JSON.stringify({
-                    type: 'Feature',
-                    geometry: { type: 'LineString', coordinates: coords },
-                });
-            } else {
-                body.trackOutline = '';
-            }
+            fields.mapBounds = JSON.stringify(mapBindings.getMapBounds());
 
-            await api.put(`/api/tracks/${trackId}`, body);
-            window.location.href = trackDetailUrl(trackId, fields.name);
-        } finally {
+            await api.put(`/api/tracks/${trackId}`, fields);
             btn.disabled = false;
-            btn.textContent = originalText;
+            btn.textContent = 'Save';
+            if (status) {
+                status.innerHTML = '<i class="fa-solid fa-check text-success"></i>';
+                setTimeout(() => {
+                    status.innerHTML = ''; 
+                }, 2000);
+            }
+        } catch {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+            if (status) {
+                status.innerHTML = '<span class="text-danger small">Failed to save</span>';
+                setTimeout(() => {
+                    status.innerHTML = ''; 
+                }, 3000);
+            }
         }
     });
 }

@@ -24,6 +24,7 @@ const ProfileSK = "PROFILE"
 func MemberSK(uid string) string   { return "MEMBER#" + uid }
 func InviteSK(email string) string { return "INVITE#" + strings.ToLower(email) }
 func LayoutSK(id string) string    { return "LAYOUT#" + id }
+func ClassSK(id string) string     { return "CLASS#" + id }
 func LapSK(lapNo int) string       { return fmt.Sprintf("LAP#%06d", lapNo) }
 func APIKeySK(keyID string) string { return "APIKEY#" + keyID }
 

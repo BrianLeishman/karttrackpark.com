@@ -24,6 +24,16 @@ func main() {
 	// Layouts
 	mux.HandleFunc("POST /api/tracks/{id}/layouts", handleCreateLayout)
 	mux.HandleFunc("GET /api/tracks/{id}/layouts", handleListLayouts)
+	mux.HandleFunc("GET /api/tracks/{id}/layouts/{layoutId}", handleGetLayout)
+	mux.HandleFunc("PUT /api/tracks/{id}/layouts/{layoutId}", handleUpdateLayout)
+	mux.HandleFunc("DELETE /api/tracks/{id}/layouts/{layoutId}", handleDeleteLayout)
+
+	// Classes
+	mux.HandleFunc("POST /api/tracks/{id}/classes", handleCreateKartClass)
+	mux.HandleFunc("GET /api/tracks/{id}/classes", handleListKartClasses)
+	mux.HandleFunc("GET /api/tracks/{id}/classes/{classId}", handleGetKartClass)
+	mux.HandleFunc("PUT /api/tracks/{id}/classes/{classId}", handleUpdateKartClass)
+	mux.HandleFunc("DELETE /api/tracks/{id}/classes/{classId}", handleDeleteKartClass)
 
 	// Invites (track-scoped)
 	mux.HandleFunc("POST /api/tracks/{id}/invites", handleCreateInvite)

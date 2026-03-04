@@ -34,11 +34,12 @@ func handleCreateEventSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		SessionName  string `json:"session_name"`
-		SessionType  string `json:"session_type"`
-		SessionOrder int    `json:"session_order"`
-		LayoutID     string `json:"layout_id"`
-		KartClass    string `json:"kart_class"`
+		SessionName  string   `json:"session_name"`
+		SessionType  string   `json:"session_type"`
+		SessionOrder int      `json:"session_order"`
+		LayoutID     string   `json:"layout_id"`
+		Reverse      bool     `json:"reverse"`
+		ClassIDs     []string `json:"class_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -58,7 +59,8 @@ func handleCreateEventSession(w http.ResponseWriter, r *http.Request) {
 		SessionType:  req.SessionType,
 		SessionOrder: req.SessionOrder,
 		LayoutID:     req.LayoutID,
-		KartClass:    req.KartClass,
+		Reverse:      req.Reverse,
+		ClassIDs:     req.ClassIDs,
 	})
 	if err != nil {
 		log.Printf("create session error: %v", err)

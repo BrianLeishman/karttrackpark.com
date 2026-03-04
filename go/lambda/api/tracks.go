@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -148,7 +149,24 @@ func handleGetTrackPublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, track)
+	// Fetch default layout's outline for hover card compatibility
+	defaultLayout, err := dynamo.GetDefaultLayoutForTrack(r.Context(), trackID)
+	if err != nil {
+		log.Printf("get default layout error: %v", err)
+	}
+
+	type trackPublicResponse struct {
+		dynamo.Track
+		TrackOutline string                   `json:"track_outline,omitempty"`
+		Annotations  []dynamo.TrackAnnotation `json:"annotations,omitempty"`
+	}
+	resp := trackPublicResponse{Track: *track}
+	if defaultLayout != nil {
+		resp.TrackOutline = defaultLayout.TrackOutline
+		resp.Annotations = defaultLayout.Annotations
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func handleGetTrack(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +230,7 @@ func handleUpdateTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only allow updating safe fields
-	allowed := map[string]bool{"name": true, "logoKey": true, "email": true, "phone": true, "city": true, "state": true, "timezone": true, "website": true, "facebook": true, "instagram": true, "youtube": true, "tiktok": true, "trackOutline": true, "mapBounds": true}
+	allowed := map[string]bool{"name": true, "logoKey": true, "email": true, "phone": true, "city": true, "state": true, "timezone": true, "website": true, "facebook": true, "instagram": true, "youtube": true, "tiktok": true, "mapBounds": true}
 	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
@@ -258,7 +276,10 @@ func handleCreateLayout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name         string                   `json:"name"`
+		IsDefault    bool                     `json:"is_default"`
+		TrackOutline string                   `json:"track_outline"`
+		Annotations  []dynamo.TrackAnnotation `json:"annotations"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -269,9 +290,37 @@ func handleCreateLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateAnnotations(req.Annotations); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// If first layout for track, auto-set default
+	existing, err := dynamo.ListLayouts(r.Context(), trackID)
+	if err != nil {
+		log.Printf("list layouts error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if len(existing) == 0 {
+		req.IsDefault = true
+	}
+
+	// If setting as default, unset previous default
+	if req.IsDefault {
+		if err := unsetDefaultLayout(r.Context(), trackID); err != nil {
+			log.Printf("unset default layout error: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
 	layout, err := dynamo.CreateLayout(r.Context(), dynamo.Layout{
-		TrackID: trackID,
-		Name:    req.Name,
+		TrackID:      trackID,
+		Name:         req.Name,
+		IsDefault:    req.IsDefault,
+		TrackOutline: req.TrackOutline,
+		Annotations:  req.Annotations,
 	})
 	if err != nil {
 		log.Printf("create layout error: %v", err)
@@ -282,7 +331,25 @@ func handleCreateLayout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, layout)
 }
 
-func handleListLayouts(w http.ResponseWriter, r *http.Request) {
+func handleGetLayout(w http.ResponseWriter, r *http.Request) {
+	trackID := r.PathValue("id")
+	layoutID := r.PathValue("layoutId")
+
+	layout, err := dynamo.GetLayout(r.Context(), trackID, layoutID)
+	if err != nil {
+		log.Printf("get layout error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if layout == nil {
+		writeError(w, http.StatusNotFound, "layout not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, layout)
+}
+
+func handleUpdateLayout(w http.ResponseWriter, r *http.Request) {
 	uid, err := requireAuth(r)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -290,18 +357,107 @@ func handleListLayouts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	trackID := r.PathValue("id")
+	layoutID := r.PathValue("layoutId")
 
-	// Verify membership
-	member, err := dynamo.GetTrackMember(r.Context(), trackID, uid)
-	if err != nil {
-		log.Printf("check membership error: %v", err)
+	if err := requireTrackRole(r, trackID, uid, "owner", "admin"); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+
+	allowed := map[string]bool{"name": true, "trackOutline": true, "isDefault": true, "annotations": true}
+	fields := map[string]any{}
+	for k, v := range req {
+		if allowed[k] {
+			fields[k] = v
+		}
+	}
+
+	// Validate annotations if provided
+	if raw, ok := fields["annotations"]; ok {
+		// JSON decodes arrays as []interface{}, re-marshal and decode into typed slice
+		b, err := json.Marshal(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid annotations")
+			return
+		}
+		var annotations []dynamo.TrackAnnotation
+		if err := json.Unmarshal(b, &annotations); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid annotations")
+			return
+		}
+		if err := validateAnnotations(annotations); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		fields["annotations"] = annotations
+	}
+
+	// If setting as default, unset previous default first
+	if isDefault, ok := fields["isDefault"]; ok {
+		if b, isBool := isDefault.(bool); isBool && b {
+			if err := unsetDefaultLayout(r.Context(), trackID); err != nil {
+				log.Printf("unset default layout error: %v", err)
+				writeError(w, http.StatusInternalServerError, "internal error")
+				return
+			}
+		}
+	}
+
+	if err := dynamo.UpdateLayout(r.Context(), trackID, layoutID, fields); err != nil {
+		log.Printf("update layout error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if member == nil {
-		writeError(w, http.StatusForbidden, "not a member of this track")
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleDeleteLayout(w http.ResponseWriter, r *http.Request) {
+	uid, err := requireAuth(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+
+	trackID := r.PathValue("id")
+	layoutID := r.PathValue("layoutId")
+
+	if err := requireTrackRole(r, trackID, uid, "owner", "admin"); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	if err := dynamo.DeleteLayout(r.Context(), trackID, layoutID); err != nil {
+		log.Printf("delete layout error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// unsetDefaultLayout clears isDefault on the current default layout for a track.
+func unsetDefaultLayout(ctx context.Context, trackID string) error {
+	layouts, err := dynamo.ListLayouts(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	for _, l := range layouts {
+		if l.IsDefault {
+			return dynamo.UpdateLayout(ctx, trackID, l.LayoutID, map[string]any{"isDefault": false})
+		}
+	}
+	return nil
+}
+
+func handleListLayouts(w http.ResponseWriter, r *http.Request) {
+	trackID := r.PathValue("id")
 
 	layouts, err := dynamo.ListLayouts(r.Context(), trackID)
 	if err != nil {
@@ -311,4 +467,203 @@ func handleListLayouts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, layouts)
+}
+
+func handleCreateKartClass(w http.ResponseWriter, r *http.Request) {
+	uid, err := requireAuth(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	trackID := r.PathValue("id")
+
+	if err := requireTrackRole(r, trackID, uid, "owner", "admin"); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	var req struct {
+		Name      string `json:"name"`
+		IsDefault bool   `json:"is_default"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+
+	// If first class for track, auto-set default
+	existing, err := dynamo.ListKartClasses(r.Context(), trackID)
+	if err != nil {
+		log.Printf("list kart classes error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if len(existing) == 0 {
+		req.IsDefault = true
+	}
+
+	// If setting as default, unset previous default
+	if req.IsDefault {
+		if err := unsetDefaultKartClass(r.Context(), trackID); err != nil {
+			log.Printf("unset default kart class error: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
+	kc, err := dynamo.CreateKartClass(r.Context(), dynamo.KartClass{
+		TrackID:   trackID,
+		Name:      req.Name,
+		IsDefault: req.IsDefault,
+	})
+	if err != nil {
+		log.Printf("create kart class error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, kc)
+}
+
+func handleListKartClasses(w http.ResponseWriter, r *http.Request) {
+	trackID := r.PathValue("id")
+
+	classes, err := dynamo.ListKartClasses(r.Context(), trackID)
+	if err != nil {
+		log.Printf("list kart classes error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, classes)
+}
+
+func handleGetKartClass(w http.ResponseWriter, r *http.Request) {
+	trackID := r.PathValue("id")
+	classID := r.PathValue("classId")
+
+	kc, err := dynamo.GetKartClass(r.Context(), trackID, classID)
+	if err != nil {
+		log.Printf("get kart class error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if kc == nil {
+		writeError(w, http.StatusNotFound, "class not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, kc)
+}
+
+func handleUpdateKartClass(w http.ResponseWriter, r *http.Request) {
+	uid, err := requireAuth(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	trackID := r.PathValue("id")
+	classID := r.PathValue("classId")
+
+	if err := requireTrackRole(r, trackID, uid, "owner", "admin"); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+
+	allowed := map[string]bool{"name": true, "isDefault": true}
+	fields := map[string]any{}
+	for k, v := range req {
+		if allowed[k] {
+			fields[k] = v
+		}
+	}
+
+	// If setting as default, unset previous default first
+	if isDefault, ok := fields["isDefault"]; ok {
+		if b, isBool := isDefault.(bool); isBool && b {
+			if err := unsetDefaultKartClass(r.Context(), trackID); err != nil {
+				log.Printf("unset default kart class error: %v", err)
+				writeError(w, http.StatusInternalServerError, "internal error")
+				return
+			}
+		}
+	}
+
+	if err := dynamo.UpdateKartClass(r.Context(), trackID, classID, fields); err != nil {
+		log.Printf("update kart class error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleDeleteKartClass(w http.ResponseWriter, r *http.Request) {
+	uid, err := requireAuth(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	trackID := r.PathValue("id")
+	classID := r.PathValue("classId")
+
+	if err := requireTrackRole(r, trackID, uid, "owner", "admin"); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	if err := dynamo.DeleteKartClass(r.Context(), trackID, classID); err != nil {
+		log.Printf("delete kart class error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// validateAnnotations checks that all annotations have valid type and position values.
+func validateAnnotations(annotations []dynamo.TrackAnnotation) error {
+	sfCount := 0
+	for _, a := range annotations {
+		if a.Type != "turn" && a.Type != "start_finish" {
+			return fmt.Errorf("invalid annotation type: %q", a.Type)
+		}
+		if a.Position < 0 || a.Position > 1 {
+			return fmt.Errorf("annotation position must be 0.0-1.0")
+		}
+		if a.Type == "start_finish" {
+			sfCount++
+		}
+	}
+	if sfCount > 1 {
+		return fmt.Errorf("at most one start_finish annotation allowed")
+	}
+	return nil
+}
+
+// unsetDefaultKartClass clears isDefault on the current default kart class for a track.
+func unsetDefaultKartClass(ctx context.Context, trackID string) error {
+	classes, err := dynamo.ListKartClasses(ctx, trackID)
+	if err != nil {
+		return err
+	}
+	for _, kc := range classes {
+		if kc.IsDefault {
+			return dynamo.UpdateKartClass(ctx, trackID, kc.ClassID, map[string]any{"isDefault": false})
+		}
+	}
+	return nil
 }

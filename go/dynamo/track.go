@@ -14,24 +14,23 @@ import (
 )
 
 type Track struct {
-	PK           string `dynamodbav:"pk" json:"-"`
-	SK           string `dynamodbav:"sk" json:"-"`
-	TrackID      string `dynamodbav:"trackId" json:"track_id"`
-	Name         string `dynamodbav:"name" json:"name"`
-	LogoKey      string `dynamodbav:"logoKey" json:"logo_key"`
-	Email        string `dynamodbav:"email" json:"email"`
-	Phone        string `dynamodbav:"phone" json:"phone"`
-	City         string `dynamodbav:"city,omitempty" json:"city,omitempty"`
-	State        string `dynamodbav:"state,omitempty" json:"state,omitempty"`
-	Timezone     string `dynamodbav:"timezone,omitempty" json:"timezone,omitempty"`
-	Website      string `dynamodbav:"website,omitempty" json:"website,omitempty"`
-	Facebook     string `dynamodbav:"facebook,omitempty" json:"facebook,omitempty"`
-	Instagram    string `dynamodbav:"instagram,omitempty" json:"instagram,omitempty"`
-	YouTube      string `dynamodbav:"youtube,omitempty" json:"youtube,omitempty"`
-	TikTok       string `dynamodbav:"tiktok,omitempty" json:"tiktok,omitempty"`
-	TrackOutline string `dynamodbav:"trackOutline,omitempty" json:"track_outline,omitempty"`
-	MapBounds    string `dynamodbav:"mapBounds,omitempty" json:"map_bounds,omitempty"`
-	CreatedAt    string `dynamodbav:"createdAt" json:"created_at"`
+	PK        string `dynamodbav:"pk" json:"-"`
+	SK        string `dynamodbav:"sk" json:"-"`
+	TrackID   string `dynamodbav:"trackId" json:"track_id"`
+	Name      string `dynamodbav:"name" json:"name"`
+	LogoKey   string `dynamodbav:"logoKey" json:"logo_key"`
+	MapBounds string `dynamodbav:"mapBounds,omitempty" json:"map_bounds,omitempty"`
+	Email     string `dynamodbav:"email" json:"email"`
+	Phone     string `dynamodbav:"phone" json:"phone"`
+	City      string `dynamodbav:"city,omitempty" json:"city,omitempty"`
+	State     string `dynamodbav:"state,omitempty" json:"state,omitempty"`
+	Timezone  string `dynamodbav:"timezone,omitempty" json:"timezone,omitempty"`
+	Website   string `dynamodbav:"website,omitempty" json:"website,omitempty"`
+	Facebook  string `dynamodbav:"facebook,omitempty" json:"facebook,omitempty"`
+	Instagram string `dynamodbav:"instagram,omitempty" json:"instagram,omitempty"`
+	YouTube   string `dynamodbav:"youtube,omitempty" json:"youtube,omitempty"`
+	TikTok    string `dynamodbav:"tiktok,omitempty" json:"tiktok,omitempty"`
+	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 type TrackMember struct {
@@ -58,12 +57,33 @@ type TrackInvite struct {
 	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
 }
 
+type TrackAnnotation struct {
+	Type     string  `dynamodbav:"type" json:"type"` // "turn" or "start_finish"
+	Lat      float64 `dynamodbav:"lat" json:"lat"`
+	Lng      float64 `dynamodbav:"lng" json:"lng"`
+	Position float64 `dynamodbav:"position" json:"position"`             // 0.0-1.0 fraction along outline
+	Name     string  `dynamodbav:"name,omitempty" json:"name,omitempty"` // optional e.g. "Hairpin"
+}
+
 type Layout struct {
+	PK           string            `dynamodbav:"pk" json:"-"`
+	SK           string            `dynamodbav:"sk" json:"-"`
+	LayoutID     string            `dynamodbav:"layoutId" json:"layout_id"`
+	TrackID      string            `dynamodbav:"trackId" json:"track_id"`
+	Name         string            `dynamodbav:"name" json:"name"`
+	IsDefault    bool              `dynamodbav:"isDefault,omitempty" json:"is_default,omitempty"`
+	TrackOutline string            `dynamodbav:"trackOutline,omitempty" json:"track_outline,omitempty"`
+	Annotations  []TrackAnnotation `dynamodbav:"annotations,omitempty" json:"annotations,omitempty"`
+	CreatedAt    string            `dynamodbav:"createdAt" json:"created_at"`
+}
+
+type KartClass struct {
 	PK        string `dynamodbav:"pk" json:"-"`
 	SK        string `dynamodbav:"sk" json:"-"`
-	LayoutID  string `dynamodbav:"layoutId" json:"layout_id"`
+	ClassID   string `dynamodbav:"classId" json:"class_id"`
 	TrackID   string `dynamodbav:"trackId" json:"track_id"`
 	Name      string `dynamodbav:"name" json:"name"`
+	IsDefault bool   `dynamodbav:"isDefault,omitempty" json:"is_default,omitempty"`
 	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
 }
 
@@ -456,6 +476,94 @@ func CreateLayout(ctx context.Context, l Layout) (*Layout, error) {
 	return &l, nil
 }
 
+// GetLayout returns a single layout by track and layout ID.
+func GetLayout(ctx context.Context, trackID, layoutID string) (*Layout, error) {
+	c, err := client()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := c.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			"sk": &types.AttributeValueMemberS{Value: LayoutSK(layoutID)},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get layout: %w", err)
+	}
+	if out.Item == nil {
+		return nil, nil
+	}
+
+	var l Layout
+	if err := attributevalue.UnmarshalMap(out.Item, &l); err != nil {
+		return nil, fmt.Errorf("unmarshal layout: %w", err)
+	}
+	return &l, nil
+}
+
+// UpdateLayout updates allowed fields on a layout.
+func UpdateLayout(ctx context.Context, trackID, layoutID string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	c, err := client()
+	if err != nil {
+		return err
+	}
+
+	expr, names, values, err := BuildUpdateExpression(fields)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			"sk": &types.AttributeValueMemberS{Value: LayoutSK(layoutID)},
+		},
+		UpdateExpression:          aws.String(expr),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return err
+}
+
+// DeleteLayout removes a layout from a track.
+func DeleteLayout(ctx context.Context, trackID, layoutID string) error {
+	c, err := client()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			"sk": &types.AttributeValueMemberS{Value: LayoutSK(layoutID)},
+		},
+	})
+	return err
+}
+
+// GetDefaultLayoutForTrack returns the layout marked as default, or nil.
+func GetDefaultLayoutForTrack(ctx context.Context, trackID string) (*Layout, error) {
+	layouts, err := ListLayouts(ctx, trackID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range layouts {
+		if layouts[i].IsDefault {
+			return &layouts[i], nil
+		}
+	}
+	return nil, nil
+}
+
 // ListLayouts returns all layouts for a track.
 func ListLayouts(ctx context.Context, trackID string) ([]Layout, error) {
 	c, err := client()
@@ -480,4 +588,145 @@ func ListLayouts(ctx context.Context, trackID string) ([]Layout, error) {
 		return nil, fmt.Errorf("unmarshal layouts: %w", err)
 	}
 	return layouts, nil
+}
+
+// CreateKartClass adds a kart class to a track.
+func CreateKartClass(ctx context.Context, kc KartClass) (*KartClass, error) {
+	c, err := client()
+	if err != nil {
+		return nil, err
+	}
+
+	kc.ClassID = xid.New().String()
+	kc.PK = TrackPK(kc.TrackID)
+	kc.SK = ClassSK(kc.ClassID)
+	kc.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	item, err := attributevalue.MarshalMap(kc)
+	if err != nil {
+		return nil, fmt.Errorf("marshal kart class: %w", err)
+	}
+
+	_, err = c.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(TableName),
+		Item:      item,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create kart class: %w", err)
+	}
+	return &kc, nil
+}
+
+// GetKartClass returns a single kart class by track and class ID.
+func GetKartClass(ctx context.Context, trackID, classID string) (*KartClass, error) {
+	c, err := client()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := c.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			"sk": &types.AttributeValueMemberS{Value: ClassSK(classID)},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get kart class: %w", err)
+	}
+	if out.Item == nil {
+		return nil, nil
+	}
+
+	var kc KartClass
+	if err := attributevalue.UnmarshalMap(out.Item, &kc); err != nil {
+		return nil, fmt.Errorf("unmarshal kart class: %w", err)
+	}
+	return &kc, nil
+}
+
+// UpdateKartClass updates allowed fields on a kart class.
+func UpdateKartClass(ctx context.Context, trackID, classID string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	c, err := client()
+	if err != nil {
+		return err
+	}
+
+	expr, names, values, err := BuildUpdateExpression(fields)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			"sk": &types.AttributeValueMemberS{Value: ClassSK(classID)},
+		},
+		UpdateExpression:          aws.String(expr),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return err
+}
+
+// DeleteKartClass removes a kart class from a track.
+func DeleteKartClass(ctx context.Context, trackID, classID string) error {
+	c, err := client()
+	if err != nil {
+		return err
+	}
+
+	_, err = c.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			"sk": &types.AttributeValueMemberS{Value: ClassSK(classID)},
+		},
+	})
+	return err
+}
+
+// ListKartClasses returns all kart classes for a track.
+func ListKartClasses(ctx context.Context, trackID string) ([]KartClass, error) {
+	c, err := client()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := c.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(TableName),
+		KeyConditionExpression: aws.String("pk = :pk AND begins_with(sk, :prefix)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":     &types.AttributeValueMemberS{Value: TrackPK(trackID)},
+			":prefix": &types.AttributeValueMemberS{Value: "CLASS#"},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list kart classes: %w", err)
+	}
+
+	var classes []KartClass
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &classes); err != nil {
+		return nil, fmt.Errorf("unmarshal kart classes: %w", err)
+	}
+	return classes, nil
+}
+
+// GetDefaultKartClassForTrack returns the kart class marked as default, or nil.
+func GetDefaultKartClassForTrack(ctx context.Context, trackID string) (*KartClass, error) {
+	classes, err := ListKartClasses(ctx, trackID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range classes {
+		if classes[i].IsDefault {
+			return &classes[i], nil
+		}
+	}
+	return nil, nil
 }

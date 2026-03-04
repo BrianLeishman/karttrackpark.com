@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.1.0",
+    "@geoman-io/leaflet-geoman-free": "^2.19.2",
     "axios": "^1.13.5",
     "bootstrap": "^5.3.8",
     "chart.js": "^4.5.1",

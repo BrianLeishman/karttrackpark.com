@@ -56,8 +56,10 @@ interface FormatSession {
     session_type: string;
     duration?: number;
     lap_count?: number;
-    kart_class?: string;
+    class_ids?: string[];
     notes?: string;
+    layout_id?: string;
+    reverse?: boolean;
 }
 
 interface Format {
@@ -592,7 +594,9 @@ function showNewEventModal(
                     session_name: s.session_name || typeLabel(s.session_type),
                     session_type: s.session_type,
                     session_order: i + 1,
-                    ...s.kart_class && { kart_class: s.kart_class },
+                    ...s.class_ids?.length && { class_ids: s.class_ids },
+                    ...s.layout_id && { layout_id: s.layout_id },
+                    ...s.reverse && { reverse: true },
                 });
             }
         }

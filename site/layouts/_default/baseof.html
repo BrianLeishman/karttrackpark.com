@@ -33,6 +33,8 @@
     <link rel="stylesheet" href="{{ $cropper.RelPermalink }}" integrity="{{ $cropper.Data.Integrity }}">
     {{ $leaflet := resources.Get "node_modules/leaflet/dist/leaflet.css" | resources.Copy "css/leaflet.css" | fingerprint }}
     <link rel="stylesheet" href="{{ $leaflet.RelPermalink }}" integrity="{{ $leaflet.Data.Integrity }}">
+    {{ $geoman := resources.Get "node_modules/@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css" | resources.Copy "css/leaflet-geoman.css" | fingerprint }}
+    <link rel="stylesheet" href="{{ $geoman.RelPermalink }}" integrity="{{ $geoman.Data.Integrity }}">
     {{ block "head" . }}{{ end }}
     <script>
     (() => {

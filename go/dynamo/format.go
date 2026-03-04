@@ -13,12 +13,14 @@ import (
 )
 
 type FormatSession struct {
-	SessionName string `dynamodbav:"sessionName" json:"session_name"`
-	SessionType string `dynamodbav:"sessionType" json:"session_type"`
-	Duration    int    `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
-	LapCount    int    `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
-	KartClass   string `dynamodbav:"kartClass,omitempty" json:"kart_class,omitempty"`
-	Notes       string `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
+	SessionName string   `dynamodbav:"sessionName" json:"session_name"`
+	SessionType string   `dynamodbav:"sessionType" json:"session_type"`
+	Duration    int      `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
+	LapCount    int      `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
+	ClassIDs    []string `dynamodbav:"classIds,omitempty" json:"class_ids,omitempty"`
+	Notes       string   `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
+	LayoutID    string   `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
+	Reverse     bool     `dynamodbav:"reverse,omitempty" json:"reverse,omitempty"`
 }
 
 type Format struct {

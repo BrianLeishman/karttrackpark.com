@@ -7,12 +7,15 @@ import { getAccessToken } from './auth';
 import { championshipDetailUrl } from './championship-detail';
 import { championshipFormHtml, bindChampionshipForm } from './championship-form';
 import type { ChampionshipFormBindings } from './championship-form';
+import { outlineMapHtml, bindOutlineMap } from './track-form';
+import type { TrackAnnotation } from './track-form';
 import { uploadAsset } from './tracks';
 
 interface TrackPublic {
     track_id: string;
     name: string;
     logo_key: string;
+    map_bounds?: string;
     email: string;
     phone: string;
     city?: string;
@@ -54,13 +57,33 @@ interface Championship {
     logo_key?: string;
 }
 
+interface Layout {
+    layout_id: string;
+    track_id: string;
+    name: string;
+    is_default?: boolean;
+    track_outline?: string;
+    annotations?: TrackAnnotation[];
+    created_at: string;
+}
+
+interface KartClass {
+    class_id: string;
+    track_id: string;
+    name: string;
+    is_default?: boolean;
+    created_at: string;
+}
+
 interface FormatSession {
     session_name: string;
     session_type: string;
     duration?: number;
     lap_count?: number;
-    kart_class?: string;
+    class_ids?: string[];
     notes?: string;
+    layout_id?: string;
+    reverse?: boolean;
 }
 
 interface Format {
@@ -204,6 +227,8 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
     let events: EventsResponse;
     let championships: Championship[];
     let formats: Format[];
+    let layouts: Layout[];
+    let classes: KartClass[];
     let role: string | null;
 
     // Check membership in parallel (silently fails if not logged in or not a member)
@@ -215,17 +240,21 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         Promise.resolve(null);
 
     try {
-        const [trackResp, eventsResp, champsResp, formatsResp, memberResult] = await Promise.all([
+        const [trackResp, eventsResp, champsResp, formatsResp, layoutsResp, classesResp, memberResult] = await Promise.all([
             axios.get<TrackPublic>(`${apiBase}/api/tracks/${trackId}/public`),
             axios.get<EventsResponse>(`${apiBase}/api/events?track_id=${trackId}`),
             axios.get<Championship[]>(`${apiBase}/api/tracks/${trackId}/championships`).catch((): { data: Championship[] } => ({ data: [] })),
             axios.get<Format[]>(`${apiBase}/api/tracks/${trackId}/formats`).catch((): { data: Format[] } => ({ data: [] })),
+            axios.get<Layout[]>(`${apiBase}/api/tracks/${trackId}/layouts`).catch((): { data: Layout[] } => ({ data: [] })),
+            axios.get<KartClass[]>(`${apiBase}/api/tracks/${trackId}/classes`).catch((): { data: KartClass[] } => ({ data: [] })),
             membershipCheck,
         ]);
         track = trackResp.data;
         events = eventsResp.data;
         championships = champsResp.data;
         formats = formatsResp.data;
+        layouts = layoutsResp.data;
+        classes = classesResp.data;
         role = memberResult;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 404) {
@@ -314,6 +343,47 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         ` : ''}
         ${canManage ? `
         <div class="d-flex align-items-center mb-3">
+            <h2 class="mb-0">Layouts</h2>
+            <button class="btn btn-sm btn-primary ms-auto" id="new-layout-btn"><i class="fa-solid fa-plus me-1"></i>New Layout</button>
+        </div>
+        <div class="row g-3 mb-5" id="layouts-list">
+            ${layouts.length > 0 ?
+                layouts.map(l => `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 layout-card" data-layout-id="${l.layout_id}" role="button">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <i class="fa-solid fa-route text-primary-emphasis" style="font-size:.9rem"></i>
+                                    <h5 class="card-title mb-0">${esc(l.name)}</h5>
+                                    ${l.is_default ? '<span class="badge text-bg-success">Default</span>' : ''}
+                                </div>
+                                <p class="card-text text-body-secondary small mb-0">${l.track_outline ? 'Has outline' : 'No outline'}</p>
+                            </div>
+                        </div>
+                    </div>`).join('') :
+                emptyState('No layouts yet.')}
+        </div>
+        <div class="d-flex align-items-center mb-3">
+            <h2 class="mb-0">Classes</h2>
+            <button class="btn btn-sm btn-primary ms-auto" id="new-class-btn"><i class="fa-solid fa-plus me-1"></i>New Class</button>
+        </div>
+        <div class="row g-3 mb-5" id="classes-list">
+            ${classes.length > 0 ?
+                classes.map(kc => `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 class-card" data-class-id="${kc.class_id}" role="button">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <i class="fa-solid fa-helmet-safety text-primary-emphasis" style="font-size:.9rem"></i>
+                                    <h5 class="card-title mb-0">${esc(kc.name)}</h5>
+                                    ${kc.is_default ? '<span class="badge text-bg-success">Default</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>`).join('') :
+                emptyState('No classes yet.')}
+        </div>
+        <div class="d-flex align-items-center mb-3">
             <h2 class="mb-0">Formats</h2>
             <button class="btn btn-sm btn-primary ms-auto" id="new-format-btn"><i class="fa-solid fa-plus me-1"></i>New</button>
         </div>
@@ -346,9 +416,61 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         });
     });
 
+    // New Layout button
+    document.getElementById('new-layout-btn')?.addEventListener('click', () => {
+        showLayoutModal(trackId, track.map_bounds, layouts, undefined, async () => {
+            await renderTrackDetail(container);
+        });
+    });
+
+    // Edit layout on card click
+    document.querySelectorAll('.layout-card').forEach(card => {
+        card.addEventListener('click', () => {
+            if (!(card instanceof HTMLElement)) {
+                return;
+            }
+            const layoutId = card.dataset.layoutId;
+            if (!layoutId) {
+                return;
+            }
+            const layout = layouts.find(l => l.layout_id === layoutId);
+            if (layout) {
+                showLayoutModal(trackId, track.map_bounds, layouts, layout, async () => {
+                    await renderTrackDetail(container);
+                });
+            }
+        });
+    });
+
+    // New Class button
+    document.getElementById('new-class-btn')?.addEventListener('click', () => {
+        showClassModal(trackId, classes, undefined, async () => {
+            await renderTrackDetail(container);
+        });
+    });
+
+    // Edit class on card click
+    document.querySelectorAll('.class-card').forEach(card => {
+        card.addEventListener('click', () => {
+            if (!(card instanceof HTMLElement)) {
+                return;
+            }
+            const classId = card.dataset.classId;
+            if (!classId) {
+                return;
+            }
+            const kc = classes.find(c => c.class_id === classId);
+            if (kc) {
+                showClassModal(trackId, classes, kc, async () => {
+                    await renderTrackDetail(container);
+                });
+            }
+        });
+    });
+
     // New Format button
     document.getElementById('new-format-btn')?.addEventListener('click', () => {
-        showFormatModal(trackId, undefined, async () => {
+        showFormatModal(trackId, layouts, classes, undefined, async () => {
             await renderTrackDetail(container);
         });
     });
@@ -365,7 +487,7 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
             }
             const format = formats.find(f => f.format_id === formatId);
             if (format) {
-                showFormatModal(trackId, format, async () => {
+                showFormatModal(trackId, layouts, classes, format, async () => {
                     await renderTrackDetail(container);
                 });
             }
@@ -454,13 +576,322 @@ function showNewChampModal(trackId: string, onSave: () => Promise<void>): void {
     });
 }
 
+function showLayoutModal(trackId: string, trackMapBounds: string | undefined, allLayouts: Layout[], layout: Layout | undefined, onSave: () => Promise<void>): void {
+    const isEdit = Boolean(layout);
+    const title = isEdit ? 'Edit Layout' : 'New Layout';
+    const submitLabel = isEdit ? 'Save' : 'Create';
+    const currentDefault = allLayouts.find(l => l.is_default && l.layout_id !== layout?.layout_id);
+    const shouldDefault = layout?.is_default || !currentDefault;
+
+    document.getElementById('layout-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="modal fade" id="layout-modal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form id="layout-form">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="layout-name">Name</label>
+                            <input type="text" class="form-control" id="layout-name" value="${esc(layout?.name ?? '')}" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="layout-default" ${shouldDefault ? 'checked' : ''}>
+                            <label class="form-check-label" for="layout-default">Default Layout</label>
+                            <div class="form-text">The default layout is shown in hover card previews.</div>
+                            ${currentDefault ? `<div class="text-warning small mt-1 d-none" id="layout-default-warn"><i class="fa-solid fa-triangle-exclamation me-1"></i>This will replace \u201c${esc(currentDefault.name)}\u201d as the default layout.</div>` : ''}
+                        </div>
+                        <label class="form-label">Track Outline</label>
+                        ${outlineMapHtml('layout')}
+                        <div class="alert alert-danger mt-3 mb-0 d-none" id="layout-error"></div>
+                    </div>
+                    <div class="modal-footer">
+                        ${isEdit ? '<button type="button" class="btn btn-outline-danger me-auto" id="layout-delete-btn"><i class="fa-solid fa-trash me-1"></i>Delete</button>' : ''}
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="layout-submit">${submitLabel}</button>
+                    </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `);
+
+    const modalEl = document.getElementById('layout-modal');
+    if (!modalEl) {
+        return;
+    }
+    const bsModal = new Modal(modalEl);
+
+    // Bind map after DOM is ready (returns null if no track bounds)
+    const mapBindings = bindOutlineMap('layout', {
+        track_outline: layout?.track_outline,
+        map_bounds: trackMapBounds,
+        annotations: layout?.annotations,
+    });
+
+    // Show/hide default warning
+    const layoutDefaultCheck = document.getElementById('layout-default');
+    const layoutDefaultWarn = document.getElementById('layout-default-warn');
+    if (layoutDefaultCheck instanceof HTMLInputElement && layoutDefaultWarn) {
+        const updateWarn = () => {
+            layoutDefaultWarn.classList.toggle('d-none', !layoutDefaultCheck.checked); 
+        };
+        updateWarn();
+        layoutDefaultCheck.addEventListener('change', updateWarn);
+    }
+
+    bsModal.show();
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        mapBindings?.destroy();
+        modalEl.remove();
+    }, { once: true });
+
+    // Invalidate map size after modal animation completes
+    modalEl.addEventListener('shown.bs.modal', () => {
+        mapBindings?.invalidateSize();
+        const nameEl = document.getElementById('layout-name');
+        if (nameEl instanceof HTMLInputElement) {
+            nameEl.focus();
+        }
+    }, { once: true });
+
+    // Submit
+    const layoutForm = document.getElementById('layout-form');
+    if (!layoutForm) {
+        return;
+    }
+    layoutForm.addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const nameInput = document.getElementById('layout-name');
+        if (!(nameInput instanceof HTMLInputElement)) {
+            return;
+        }
+        const name = nameInput.value.trim();
+        const defaultCheck = document.getElementById('layout-default');
+        const isDefault = defaultCheck instanceof HTMLInputElement ? defaultCheck.checked : false;
+
+        const btn = document.getElementById('layout-submit');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${isEdit ? 'Saving' : 'Creating'}\u2026`;
+
+        // Build outline GeoJSON
+        let trackOutline = '';
+        if (mapBindings && mapBindings.outlinePoints.length >= 2) {
+            const coords = mapBindings.outlinePoints.map(([lat, lng]) => [lng, lat]);
+            const first = coords[0];
+            const last = coords[coords.length - 1];
+            if (first[0] !== last[0] || first[1] !== last[1]) {
+                coords.push([...first]);
+            }
+            trackOutline = JSON.stringify({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: coords },
+            });
+        }
+        try {
+            if (isEdit && layout) {
+                await api.put(`/api/tracks/${trackId}/layouts/${layout.layout_id}`, {
+                    name,
+                    isDefault: isDefault,
+                    trackOutline,
+                    annotations: mapBindings?.annotations ?? [],
+                });
+            } else {
+                await api.post(`/api/tracks/${trackId}/layouts`, {
+                    name,
+                    is_default: isDefault,
+                    track_outline: trackOutline,
+                    annotations: mapBindings?.annotations ?? [],
+                });
+            }
+            bsModal.hide();
+            await onSave();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = submitLabel;
+            const errEl = document.getElementById('layout-error');
+            if (errEl) {
+                const msg = err instanceof Error ? err.message : 'Something went wrong';
+                errEl.textContent = `Failed to save layout: ${msg}`;
+                errEl.classList.remove('d-none');
+            }
+        }
+    });
+
+    // Delete
+    document.getElementById('layout-delete-btn')?.addEventListener('click', async () => {
+        if (!layout) {
+            return;
+        }
+        if (!confirm(`Delete "${layout.name}"? This cannot be undone.`)) {
+            return;
+        }
+        try {
+            await api.delete(`/api/tracks/${trackId}/layouts/${layout.layout_id}`);
+            bsModal.hide();
+            await onSave();
+        } catch { /* api interceptor shows toast */ }
+    });
+}
+
+function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass | undefined, onSave: () => Promise<void>): void {
+    const isEdit = Boolean(kc);
+    const title = isEdit ? 'Edit Class' : 'New Class';
+    const submitLabel = isEdit ? 'Save' : 'Create';
+    const currentDefault = allClasses.find(c => c.is_default && c.class_id !== kc?.class_id);
+    const shouldDefault = kc?.is_default || !currentDefault;
+
+    document.getElementById('class-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="modal fade" id="class-modal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form id="class-form">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="class-name">Name</label>
+                            <input type="text" class="form-control" id="class-name" value="${esc(kc?.name ?? '')}" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="class-default" ${shouldDefault ? 'checked' : ''}>
+                            <label class="form-check-label" for="class-default">Default Class</label>
+                            <div class="form-text">The default class is pre-checked when adding sessions to formats.</div>
+                            ${currentDefault ? `<div class="text-warning small mt-1 d-none" id="class-default-warn"><i class="fa-solid fa-triangle-exclamation me-1"></i>This will replace \u201c${esc(currentDefault.name)}\u201d as the default class.</div>` : ''}
+                        </div>
+                        <div class="alert alert-danger mt-3 mb-0 d-none" id="class-error"></div>
+                    </div>
+                    <div class="modal-footer">
+                        ${isEdit ? '<button type="button" class="btn btn-outline-danger me-auto" id="class-delete-btn"><i class="fa-solid fa-trash me-1"></i>Delete</button>' : ''}
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="class-submit">${submitLabel}</button>
+                    </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `);
+
+    const modalEl = document.getElementById('class-modal');
+    if (!modalEl) {
+        return;
+    }
+
+    // Show/hide default warning
+    const classDefaultCheck = document.getElementById('class-default');
+    const classDefaultWarn = document.getElementById('class-default-warn');
+    if (classDefaultCheck instanceof HTMLInputElement && classDefaultWarn) {
+        const updateWarn = () => {
+            classDefaultWarn.classList.toggle('d-none', !classDefaultCheck.checked); 
+        };
+        updateWarn();
+        classDefaultCheck.addEventListener('change', updateWarn);
+    }
+
+    const bsModal = new Modal(modalEl);
+    bsModal.show();
+    modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+
+    modalEl.addEventListener('shown.bs.modal', () => {
+        const nameEl = document.getElementById('class-name');
+        if (nameEl instanceof HTMLInputElement) {
+            nameEl.focus();
+        }
+    }, { once: true });
+
+    const classForm = document.getElementById('class-form');
+    if (!classForm) {
+        return;
+    }
+    classForm.addEventListener('submit', async e => {
+        e.preventDefault();
+
+        const nameInput = document.getElementById('class-name');
+        if (!(nameInput instanceof HTMLInputElement)) {
+            return;
+        }
+        const name = nameInput.value.trim();
+        const defaultCheck = document.getElementById('class-default');
+        const isDefault = defaultCheck instanceof HTMLInputElement ? defaultCheck.checked : false;
+
+        const btn = document.getElementById('class-submit');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${isEdit ? 'Saving' : 'Creating'}\u2026`;
+
+        try {
+            if (isEdit && kc) {
+                await api.put(`/api/tracks/${trackId}/classes/${kc.class_id}`, {
+                    name,
+                    isDefault: isDefault,
+                });
+            } else {
+                await api.post(`/api/tracks/${trackId}/classes`, {
+                    name,
+                    is_default: isDefault,
+                });
+            }
+            bsModal.hide();
+            await onSave();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = submitLabel;
+            const errEl = document.getElementById('class-error');
+            if (errEl) {
+                const msg = err instanceof Error ? err.message : 'Something went wrong';
+                errEl.textContent = `Failed to save class: ${msg}`;
+                errEl.classList.remove('d-none');
+            }
+        }
+    });
+
+    // Delete
+    document.getElementById('class-delete-btn')?.addEventListener('click', async () => {
+        if (!kc) {
+            return;
+        }
+        if (!confirm(`Delete "${kc.name}"? This cannot be undone.`)) {
+            return;
+        }
+        try {
+            await api.delete(`/api/tracks/${trackId}/classes/${kc.class_id}`);
+            bsModal.hide();
+            await onSave();
+        } catch { /* api interceptor shows toast */ }
+    });
+}
+
 const SESSION_TYPES = ['practice', 'quali', 'heat', 'race', 'final', 'driver_meeting'];
 const typeLabel = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-function sessionRowHtml(s: FormatSession, idx: number): string {
+function sessionRowHtml(s: FormatSession, idx: number, layouts: Layout[], classes: KartClass[]): string {
     const typeOptions = SESSION_TYPES.map(t =>
         `<option value="${t}" ${s.session_type === t ? 'selected' : ''}>${typeLabel(t)}</option>`,
     ).join('');
+
+    const layoutOptions = layouts.map(l =>
+        `<option value="${l.layout_id}" ${s.layout_id === l.layout_id ? 'selected' : ''}>${esc(l.name)}${l.is_default ? ' (default)' : ''}</option>`,
+    ).join('');
+
+    const classCheckboxes = classes.map(kc => {
+        const checked = s.class_ids?.includes(kc.class_id) ?? kc.is_default;
+        return `<div class="form-check form-check-inline mb-0">
+            <input type="checkbox" class="form-check-input sess-class" data-class-id="${kc.class_id}" ${checked ? 'checked' : ''}>
+            <label class="form-check-label small">${esc(kc.name)}</label>
+        </div>`;
+    }).join('');
 
     return `
         <div class="format-session-row border rounded p-2 mb-2" data-idx="${idx}">
@@ -473,6 +904,19 @@ function sessionRowHtml(s: FormatSession, idx: number): string {
                 <button type="button" class="btn btn-sm btn-outline-secondary toggle-notes" title="Notes"><i class="fa-solid fa-note-sticky"></i></button>
                 <button type="button" class="btn btn-sm btn-outline-danger remove-session" title="Remove"><i class="fa-solid fa-trash"></i></button>
             </div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <select class="form-select form-select-sm sess-layout" style="max-width:200px" title="Layout" required>
+                    ${layoutOptions}
+                </select>
+                <div class="form-check form-check-inline mb-0">
+                    <input type="checkbox" class="form-check-input sess-reverse" ${s.reverse ? 'checked' : ''}>
+                    <label class="form-check-label small">Reverse</label>
+                </div>
+            </div>
+            ${classes.length > 0 ? `<div class="d-flex align-items-center gap-1 mb-2">
+                <span class="text-body-secondary small me-1">Classes:</span>
+                ${classCheckboxes}
+            </div>` : ''}
             <div class="sess-notes-wrap" style="${s.notes ? '' : 'display:none'}">
                 <input type="text" class="form-control form-control-sm sess-notes" placeholder="Notes (optional)" value="${esc(s.notes ?? '')}">
             </div>
@@ -488,11 +932,21 @@ function collectSessions(container: HTMLElement): FormatSession[] {
         const durationEl = row.querySelector('.sess-duration');
         const lapsEl = row.querySelector('.sess-laps');
         const notesEl = row.querySelector('.sess-notes');
+        const layoutEl = row.querySelector('.sess-layout');
+        const reverseEl = row.querySelector('.sess-reverse');
         const name = nameEl instanceof HTMLInputElement ? nameEl.value.trim() : '';
         const type = typeEl instanceof HTMLSelectElement ? typeEl.value : 'heat';
         const duration = parseInt(durationEl instanceof HTMLInputElement ? durationEl.value : '', 10) || 0;
         const lapCount = parseInt(lapsEl instanceof HTMLInputElement ? lapsEl.value : '', 10) || 0;
         const notes = notesEl instanceof HTMLInputElement ? notesEl.value.trim() : '';
+        const layoutId = layoutEl instanceof HTMLSelectElement ? layoutEl.value : '';
+        const reverse = reverseEl instanceof HTMLInputElement ? reverseEl.checked : false;
+        const classIds: string[] = [];
+        row.querySelectorAll('.sess-class').forEach(cb => {
+            if (cb instanceof HTMLInputElement && cb.checked && cb.dataset.classId) {
+                classIds.push(cb.dataset.classId);
+            }
+        });
         const s: FormatSession = { session_name: name, session_type: type };
         if (duration > 0) {
             s.duration = duration;
@@ -502,6 +956,15 @@ function collectSessions(container: HTMLElement): FormatSession[] {
         }
         if (notes) {
             s.notes = notes;
+        }
+        if (layoutId) {
+            s.layout_id = layoutId;
+        }
+        if (reverse) {
+            s.reverse = true;
+        }
+        if (classIds.length > 0) {
+            s.class_ids = classIds;
         }
         sessions.push(s);
     });
@@ -566,7 +1029,7 @@ function bindSessionListEvents(listEl: HTMLElement): void {
     });
 }
 
-function showFormatModal(trackId: string, format: Format | undefined, onSave: () => Promise<void>): void {
+function showFormatModal(trackId: string, layouts: Layout[], classes: KartClass[], format: Format | undefined, onSave: () => Promise<void>): void {
     const isEdit = Boolean(format);
     const title = isEdit ? 'Edit Format' : 'New Format';
     const submitLabel = isEdit ? 'Save' : 'Create';
@@ -589,7 +1052,7 @@ function showFormatModal(trackId: string, format: Format | undefined, onSave: ()
                         </div>
                         <label class="form-label">Sessions</label>
                         <div id="format-session-list">
-                            ${sessions.map((s, i) => sessionRowHtml(s, i)).join('')}
+                            ${sessions.map((s, i) => sessionRowHtml(s, i, layouts, classes)).join('')}
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-primary" id="add-session-btn"><i class="fa-solid fa-plus me-1"></i>Add Session</button>
                         <div class="alert alert-danger mt-3 mb-0 d-none" id="format-error"></div>
@@ -634,7 +1097,7 @@ function showFormatModal(trackId: string, format: Format | undefined, onSave: ()
             const idx = listEl.querySelectorAll('.format-session-row').length;
             listEl.insertAdjacentHTML('beforeend', sessionRowHtml({
                 session_name: typeLabel('heat'), session_type: 'heat',
-            }, idx));
+            }, idx, layouts, classes));
         });
     }
 
