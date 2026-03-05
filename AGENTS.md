@@ -42,6 +42,18 @@ el!.addEventListener(...)                   // non-null assertion
 (foo as SomeType).bar                      // type assertion
 ```
 
+## Planning Rules
+
+Before implementing anything, **search for existing patterns first**. This codebase has shared utilities — use them.
+
+- **Search before creating.** Before writing a helper function, interface, or constant, grep the codebase for similar patterns. If it exists, import it. If it almost exists, extend the shared version.
+- **Shared modules.** Common utilities live in specific files. Check these before duplicating:
+  - `site/ts/html.ts` — `esc()`, `emptyState()`, `formatDate()`, `typeBadge()`, `statusColor()`, `typeLabel()`
+  - `site/ts/url-utils.ts` — `slugify()`, `isHugoServer()`, `*DetailUrl()`, `getEntityId()`, `ensureCorrectSlug()`
+  - `site/ts/api.ts` — `api` (axios instance), `apiBase`, `assetsBase`
+- **No deprecated code.** Do not mark things as deprecated — delete them. This project is young. If something is unused, remove it.
+- **No re-inventing.** If you need a date formatter, type badge, status color, or URL builder — it already exists. Import it.
+
 ## Project Overview
 
 Kart Track Park is a go-kart track information and community site.

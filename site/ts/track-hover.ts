@@ -1,6 +1,10 @@
 import axios from 'axios';
 import L from 'leaflet';
 import { Popover } from 'bootstrap';
+import { apiBase, assetsBase } from './api';
+import { esc } from './html';
+import type { TrackAnnotation } from './track-form';
+import { createAnnotationIcon } from './track-form';
 
 interface TrackPublic {
     track_id: string;
@@ -10,19 +14,10 @@ interface TrackPublic {
     state?: string;
     track_outline?: string;
     map_bounds?: string;
+    annotations?: TrackAnnotation[];
 }
-
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
-    'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
-
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
-    'https://assets.karttrackpark.com';
 
 const cache = new Map<string, TrackPublic>();
-
-function esc(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 function buildContent(track: TrackPublic): string {
     const logo = track.logo_key ?
@@ -99,6 +94,21 @@ function initMap(popoverEl: HTMLElement, track: TrackPublic): void {
                 L.polyline(latLngs, { color: '#0d6efd', weight: 3 }).addTo(map);
             }
         } catch { /* ignore bad JSON */ }
+    }
+
+    // Draw turn and annotation markers (annotations includes layout + track turns)
+    for (const a of track.annotations ?? []) {
+        let label = a.type === 'start_finish' ? 'S/F' : 'T?';
+        if (a.type === 'turn' && a.number) {
+            label = `T${a.number}`;
+            if (a.name) {
+                label += ` ${a.name}`;
+            }
+        }
+        L.marker([a.lat, a.lng], {
+            icon: createAnnotationIcon(label, a.type),
+            interactive: false,
+        }).addTo(map);
     }
 }
 

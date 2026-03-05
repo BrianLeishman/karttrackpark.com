@@ -2,13 +2,14 @@ import axios from 'axios';
 import { Modal } from 'bootstrap';
 import { parsePhoneNumberWithError } from 'libphonenumber-js';
 import Sortable from 'sortablejs';
-import { api } from './api';
+import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { championshipDetailUrl } from './championship-detail';
+import { getEntityId, ensureCorrectSlug, championshipDetailUrl, seriesDetailUrl, eventDetailUrl } from './url-utils';
 import { championshipFormHtml, bindChampionshipForm } from './championship-form';
 import type { ChampionshipFormBindings } from './championship-form';
 import { outlineMapHtml, bindOutlineMap } from './track-form';
 import type { TrackAnnotation } from './track-form';
+import { esc, emptyState, formatDate, typeBadge, typeLabel } from './html';
 import { uploadAsset } from './tracks';
 
 interface TrackPublic {
@@ -33,6 +34,14 @@ interface TrackAuth {
     role: string;
 }
 
+interface SeriesContext {
+    series_id: string;
+    series_name: string;
+    championship_id: string;
+    championship_name: string;
+    round_number: number;
+}
+
 interface TrackEvent {
     event_id: string;
     track_id: string;
@@ -43,6 +52,7 @@ interface TrackEvent {
     start_time: string;
     end_time?: string;
     created_at: string;
+    series?: SeriesContext[];
 }
 
 interface EventsResponse {
@@ -57,7 +67,7 @@ interface Championship {
     logo_key?: string;
 }
 
-interface Layout {
+export interface Layout {
     layout_id: string;
     track_id: string;
     name: string;
@@ -67,15 +77,18 @@ interface Layout {
     created_at: string;
 }
 
-interface KartClass {
+export interface KartClass {
     class_id: string;
     track_id: string;
     name: string;
+    chassis?: string;
+    engine?: string;
+    description?: string;
     is_default?: boolean;
     created_at: string;
 }
 
-interface FormatSession {
+export interface FormatSession {
     session_name: string;
     session_type: string;
     duration?: number;
@@ -86,7 +99,7 @@ interface FormatSession {
     reverse?: boolean;
 }
 
-interface Format {
+export interface Format {
     format_id: string;
     track_id: string;
     name: string;
@@ -94,57 +107,7 @@ interface Format {
     created_at: string;
 }
 
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
-    'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
-
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
-    'https://assets.karttrackpark.com';
-
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-});
-
-function isHugoServer(): boolean {
-    return document.querySelector<HTMLMetaElement>('meta[name="hugo-server"]')?.content === 'true';
-}
-
-function getTrackId(): string | null {
-    if (isHugoServer()) {
-        return new URLSearchParams(window.location.search).get('id');
-    }
-    const match = /^\/tracks\/([a-z0-9]+)/.exec(window.location.pathname);
-    return match?.[1] ?? null;
-}
-
-export function slugify(name: string): string {
-    return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-export function trackDetailUrl(trackId: string, trackName: string): string {
-    if (isHugoServer()) {
-        return `/tracks/?id=${trackId}`;
-    }
-    return `/tracks/${trackId}/${slugify(trackName)}`;
-}
-
-function ensureCorrectSlug(track: TrackPublic): boolean {
-    if (isHugoServer()) {
-        return false;
-    }
-    const expectedSlug = slugify(track.name);
-    const pathParts = window.location.pathname.split('/');
-    const currentSlug = pathParts[3] ?? '';
-    if (currentSlug !== expectedSlug) {
-        window.location.replace(`/tracks/${track.track_id}/${expectedSlug}`);
-        return true;
-    }
-    return false;
-}
+export { slugify, isHugoServer, trackDetailUrl } from './url-utils';
 
 function formatPhone(rfc3966: string): { href: string; display: string } {
     try {
@@ -157,30 +120,27 @@ function formatPhone(rfc3966: string): { href: string; display: string } {
     }
 }
 
-function formatDate(iso: string): string {
-    return dateFmt.format(new Date(iso));
-}
-
-function typeBadge(eventType?: string): string {
-    if (!eventType) {
+function seriesBadges(event: TrackEvent): string {
+    if (!event.series?.length) {
         return '';
     }
-    return `<span class="badge text-bg-secondary">${eventType}</span>`;
+    return event.series.map(s =>
+        `<a href="${championshipDetailUrl(s.championship_id, s.championship_name)}" class="badge text-bg-warning text-decoration-none me-1" title="${esc(s.championship_name)}">${esc(s.championship_name)}</a>` +
+        `<a href="${seriesDetailUrl(s.series_id, s.series_name)}" class="badge text-bg-info text-decoration-none me-1" title="${esc(s.series_name)}">R${s.round_number} ${esc(s.series_name)}</a>`,
+    ).join('');
 }
 
-function eventCard(event: TrackEvent): string {
+function eventRow(event: TrackEvent): string {
     return `
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">${event.name}</h5>
-                    <p class="card-text text-body-secondary small mb-2">
-                        <i class="fa-solid fa-clock me-1"></i>${formatDate(event.start_time)}${event.end_time ? ` \u2014 ${formatDate(event.end_time)}` : ''}
-                    </p>
-                    ${event.description ? `<p class="card-text small">${event.description}</p>` : ''}
-                    <div class="d-flex gap-2 mt-2">${typeBadge(event.event_type)}</div>
+        <div class="d-flex align-items-center gap-2 py-2 border-bottom">
+            <div class="flex-grow-1">
+                <a href="${eventDetailUrl(event.event_id, event.name)}" class="fw-semibold text-decoration-none">${esc(event.name)}</a>
+                <div class="d-flex flex-wrap gap-1 mt-1">
+                    ${typeBadge(event.event_type)}
+                    ${seriesBadges(event)}
                 </div>
             </div>
+            <span class="text-body-secondary small text-nowrap">${formatDate(event.start_time)}</span>
         </div>`;
 }
 
@@ -206,16 +166,24 @@ function socialLinks(track: TrackPublic): string {
     ).join('')}</div>`;
 }
 
-function emptyState(message: string): string {
-    return `<div class="col-12"><p class="text-body-secondary text-center py-3">${message}</p></div>`;
-}
-
-function esc(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function bindShowMore(containerId: string, buttonId: string, allItems: string[], pageSize: number): void {
+    let shown = pageSize;
+    document.getElementById(buttonId)?.addEventListener('click', () => {
+        const el = document.getElementById(containerId);
+        if (!el) {
+            return;
+        }
+        const next = allItems.slice(shown, shown + pageSize);
+        el.insertAdjacentHTML('beforeend', next.join(''));
+        shown += next.length;
+        if (shown >= allItems.length) {
+            document.getElementById(buttonId)?.remove();
+        }
+    });
 }
 
 export async function renderTrackDetail(container: HTMLElement): Promise<void> {
-    const trackId = getTrackId();
+    const trackId = getEntityId('tracks');
     if (!trackId) {
         container.innerHTML = '<div class="alert alert-warning">No track ID specified.</div>';
         return;
@@ -226,9 +194,6 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
     let track: TrackPublic;
     let events: EventsResponse;
     let championships: Championship[];
-    let formats: Format[];
-    let layouts: Layout[];
-    let classes: KartClass[];
     let role: string | null;
 
     // Check membership in parallel (silently fails if not logged in or not a member)
@@ -240,21 +205,15 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         Promise.resolve(null);
 
     try {
-        const [trackResp, eventsResp, champsResp, formatsResp, layoutsResp, classesResp, memberResult] = await Promise.all([
+        const [trackResp, eventsResp, champsResp, memberResult] = await Promise.all([
             axios.get<TrackPublic>(`${apiBase}/api/tracks/${trackId}/public`),
             axios.get<EventsResponse>(`${apiBase}/api/events?track_id=${trackId}`),
             axios.get<Championship[]>(`${apiBase}/api/tracks/${trackId}/championships`).catch((): { data: Championship[] } => ({ data: [] })),
-            axios.get<Format[]>(`${apiBase}/api/tracks/${trackId}/formats`).catch((): { data: Format[] } => ({ data: [] })),
-            axios.get<Layout[]>(`${apiBase}/api/tracks/${trackId}/layouts`).catch((): { data: Layout[] } => ({ data: [] })),
-            axios.get<KartClass[]>(`${apiBase}/api/tracks/${trackId}/classes`).catch((): { data: KartClass[] } => ({ data: [] })),
             membershipCheck,
         ]);
         track = trackResp.data;
         events = eventsResp.data;
         championships = champsResp.data;
-        formats = formatsResp.data;
-        layouts = layoutsResp.data;
-        classes = classesResp.data;
         role = memberResult;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 404) {
@@ -265,7 +224,7 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         return;
     }
 
-    if (ensureCorrectSlug(track)) {
+    if (ensureCorrectSlug('tracks', track.track_id, track.name)) {
         return;
     }
 
@@ -289,15 +248,16 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         contactItems.push(`<a href="${track.website}" target="_blank" rel="noopener" class="text-body-secondary text-decoration-none"><i class="fa-solid fa-globe me-1"></i>${track.website}</a>`);
     }
 
-    const upcomingCards = events.upcoming.length > 0 ?
-        events.upcoming.map(eventCard).join('') :
-        emptyState('No upcoming events.');
+    const PAGE_SIZE = 5;
 
-    const recentCards = events.recent.length > 0 ?
-        events.recent.map(eventCard).join('') :
-        emptyState('No recent events.');
+    const recentAll = events.recent.map(eventRow);
+    const upcomingAll = events.upcoming.map(eventRow);
 
-    const showChampSection = championships.length > 0 || canManage;
+    const recentInitial = recentAll.slice(0, PAGE_SIZE).join('') ||
+        '<p class="text-body-secondary text-center py-3">No recent events.</p>';
+    const upcomingInitial = upcomingAll.slice(0, PAGE_SIZE).join('') ||
+        '<p class="text-body-secondary text-center py-3">No upcoming events.</p>';
+
     const champCards = championships.length > 0 ?
         championships.map(c => `
             <div class="col-md-6 col-lg-4">
@@ -334,163 +294,39 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
                 ${socialLinks(track)}
             </div>
         </div>
-        ${showChampSection ? `
-        <div class="d-flex align-items-center mb-3">
-            <h2 class="mb-0">Championships</h2>
-            ${canManage ? '<button class="btn btn-sm btn-primary ms-auto" id="new-champ-btn"><i class="fa-solid fa-plus me-1"></i>New</button>' : ''}
-        </div>
-        <div class="row g-3 mb-5">${champCards}</div>
-        ` : ''}
-        ${canManage ? `
-        <div class="d-flex align-items-center mb-3">
-            <h2 class="mb-0">Layouts</h2>
-            <button class="btn btn-sm btn-primary ms-auto" id="new-layout-btn"><i class="fa-solid fa-plus me-1"></i>New Layout</button>
-        </div>
-        <div class="row g-3 mb-5" id="layouts-list">
-            ${layouts.length > 0 ?
-                layouts.map(l => `
-                    <div class="col-md-6 col-lg-4">
-                        <div class="card h-100 layout-card" data-layout-id="${l.layout_id}" role="button">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fa-solid fa-route text-primary-emphasis" style="font-size:.9rem"></i>
-                                    <h5 class="card-title mb-0">${esc(l.name)}</h5>
-                                    ${l.is_default ? '<span class="badge text-bg-success">Default</span>' : ''}
-                                </div>
-                                <p class="card-text text-body-secondary small mb-0">${l.track_outline ? 'Has outline' : 'No outline'}</p>
-                            </div>
-                        </div>
-                    </div>`).join('') :
-                emptyState('No layouts yet.')}
-        </div>
-        <div class="d-flex align-items-center mb-3">
-            <h2 class="mb-0">Classes</h2>
-            <button class="btn btn-sm btn-primary ms-auto" id="new-class-btn"><i class="fa-solid fa-plus me-1"></i>New Class</button>
-        </div>
-        <div class="row g-3 mb-5" id="classes-list">
-            ${classes.length > 0 ?
-                classes.map(kc => `
-                    <div class="col-md-6 col-lg-4">
-                        <div class="card h-100 class-card" data-class-id="${kc.class_id}" role="button">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fa-solid fa-helmet-safety text-primary-emphasis" style="font-size:.9rem"></i>
-                                    <h5 class="card-title mb-0">${esc(kc.name)}</h5>
-                                    ${kc.is_default ? '<span class="badge text-bg-success">Default</span>' : ''}
-                                </div>
-                            </div>
-                        </div>
-                    </div>`).join('') :
-                emptyState('No classes yet.')}
-        </div>
-        <div class="d-flex align-items-center mb-3">
-            <h2 class="mb-0">Formats</h2>
-            <button class="btn btn-sm btn-primary ms-auto" id="new-format-btn"><i class="fa-solid fa-plus me-1"></i>New</button>
-        </div>
-        <div class="row g-3 mb-5" id="formats-list">
-            ${formats.length > 0 ?
-                formats.map(f => `
-                    <div class="col-md-6 col-lg-4">
-                        <div class="card h-100 format-card" data-format-id="${f.format_id}" role="button">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <i class="fa-solid fa-list-ol text-primary-emphasis" style="font-size:.9rem"></i>
-                                    <h5 class="card-title mb-0">${esc(f.name)}</h5>
-                                </div>
-                                <p class="card-text text-body-secondary small mb-0">${f.sessions.length} session${f.sessions.length !== 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
-                    </div>`).join('') :
-                emptyState('No formats yet.')}
-        </div>
-        ` : ''}
-        <h2 class="mb-3">Upcoming Events</h2>
-        <div class="row g-3 mb-5">${upcomingCards}</div>
-        <h2 class="mb-3">Recent Events</h2>
-        <div class="row g-3">${recentCards}</div>`;
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="events-tab" data-bs-toggle="tab" data-bs-target="#events-pane" type="button" role="tab">Events</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="champs-tab" data-bs-toggle="tab" data-bs-target="#champs-pane" type="button" role="tab">Championships</button>
+            </li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="events-pane" role="tabpanel">
+                <h3 class="mb-2">Recent</h3>
+                <div id="recent-events">${recentInitial}</div>
+                ${recentAll.length > PAGE_SIZE ? '<button class="btn btn-sm btn-outline-secondary mt-2" id="show-more-recent">Show more</button>' : ''}
+                <h3 class="mb-2 mt-4">Upcoming</h3>
+                <div id="upcoming-events">${upcomingInitial}</div>
+                ${upcomingAll.length > PAGE_SIZE ? '<button class="btn btn-sm btn-outline-secondary mt-2" id="show-more-upcoming">Show more</button>' : ''}
+            </div>
+            <div class="tab-pane fade" id="champs-pane" role="tabpanel">
+                <div class="d-flex align-items-center mb-3">
+                    ${canManage ? '<button class="btn btn-sm btn-primary ms-auto" id="new-champ-btn"><i class="fa-solid fa-plus me-1"></i>New Championship</button>' : ''}
+                </div>
+                <div class="row g-3">${champCards}</div>
+            </div>
+        </div>`;
+
+    // Show more buttons
+    bindShowMore('recent-events', 'show-more-recent', recentAll, PAGE_SIZE);
+    bindShowMore('upcoming-events', 'show-more-upcoming', upcomingAll, PAGE_SIZE);
 
     // New Championship modal handler
     document.getElementById('new-champ-btn')?.addEventListener('click', () => {
         showNewChampModal(trackId, async () => {
             await renderTrackDetail(container);
-        });
-    });
-
-    // New Layout button
-    document.getElementById('new-layout-btn')?.addEventListener('click', () => {
-        showLayoutModal(trackId, track.map_bounds, layouts, undefined, async () => {
-            await renderTrackDetail(container);
-        });
-    });
-
-    // Edit layout on card click
-    document.querySelectorAll('.layout-card').forEach(card => {
-        card.addEventListener('click', () => {
-            if (!(card instanceof HTMLElement)) {
-                return;
-            }
-            const layoutId = card.dataset.layoutId;
-            if (!layoutId) {
-                return;
-            }
-            const layout = layouts.find(l => l.layout_id === layoutId);
-            if (layout) {
-                showLayoutModal(trackId, track.map_bounds, layouts, layout, async () => {
-                    await renderTrackDetail(container);
-                });
-            }
-        });
-    });
-
-    // New Class button
-    document.getElementById('new-class-btn')?.addEventListener('click', () => {
-        showClassModal(trackId, classes, undefined, async () => {
-            await renderTrackDetail(container);
-        });
-    });
-
-    // Edit class on card click
-    document.querySelectorAll('.class-card').forEach(card => {
-        card.addEventListener('click', () => {
-            if (!(card instanceof HTMLElement)) {
-                return;
-            }
-            const classId = card.dataset.classId;
-            if (!classId) {
-                return;
-            }
-            const kc = classes.find(c => c.class_id === classId);
-            if (kc) {
-                showClassModal(trackId, classes, kc, async () => {
-                    await renderTrackDetail(container);
-                });
-            }
-        });
-    });
-
-    // New Format button
-    document.getElementById('new-format-btn')?.addEventListener('click', () => {
-        showFormatModal(trackId, layouts, classes, undefined, async () => {
-            await renderTrackDetail(container);
-        });
-    });
-
-    // Edit format on card click
-    document.querySelectorAll('.format-card').forEach(card => {
-        card.addEventListener('click', () => {
-            if (!(card instanceof HTMLElement)) {
-                return;
-            }
-            const formatId = card.dataset.formatId;
-            if (!formatId) {
-                return;
-            }
-            const format = formats.find(f => f.format_id === formatId);
-            if (format) {
-                showFormatModal(trackId, layouts, classes, format, async () => {
-                    await renderTrackDetail(container);
-                });
-            }
         });
     });
 }
@@ -576,12 +412,17 @@ function showNewChampModal(trackId: string, onSave: () => Promise<void>): void {
     });
 }
 
-function showLayoutModal(trackId: string, trackMapBounds: string | undefined, allLayouts: Layout[], layout: Layout | undefined, onSave: () => Promise<void>): void {
-    const isEdit = Boolean(layout);
-    const title = isEdit ? 'Edit Layout' : 'New Layout';
+export function showLayoutModal(trackId: string, trackMapBounds: string | undefined, allLayouts: Layout[], layout: Layout | undefined, onSave: () => Promise<void>, duplicate = false, trackTurns?: TrackAnnotation[]): void {
+    const isEdit = Boolean(layout) && !duplicate;
+    let title = 'New Layout';
+    if (duplicate) {
+        title = 'Duplicate Layout';
+    } else if (isEdit) {
+        title = 'Edit Layout';
+    }
     const submitLabel = isEdit ? 'Save' : 'Create';
     const currentDefault = allLayouts.find(l => l.is_default && l.layout_id !== layout?.layout_id);
-    const shouldDefault = layout?.is_default || !currentDefault;
+    const shouldDefault = !duplicate && (layout?.is_default || !currentDefault);
 
     document.getElementById('layout-modal')?.remove();
     document.body.insertAdjacentHTML('beforeend', `
@@ -596,7 +437,7 @@ function showLayoutModal(trackId: string, trackMapBounds: string | undefined, al
                     <div class="modal-body">
                         <div class="mb-3">
                             <label class="form-label" for="layout-name">Name</label>
-                            <input type="text" class="form-control" id="layout-name" value="${esc(layout?.name ?? '')}" required>
+                            <input type="text" class="form-control" id="layout-name" value="${esc(duplicate && layout ? `${layout.name} (Copy)` : layout?.name ?? '')}" required>
                         </div>
                         <div class="form-check mb-3">
                             <input type="checkbox" class="form-check-input" id="layout-default" ${shouldDefault ? 'checked' : ''}>
@@ -630,6 +471,7 @@ function showLayoutModal(trackId: string, trackMapBounds: string | undefined, al
         track_outline: layout?.track_outline,
         map_bounds: trackMapBounds,
         annotations: layout?.annotations,
+        turns: trackTurns,
     });
 
     // Show/hide default warning
@@ -741,7 +583,7 @@ function showLayoutModal(trackId: string, trackMapBounds: string | undefined, al
     });
 }
 
-function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass | undefined, onSave: () => Promise<void>): void {
+export function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass | undefined, onSave: () => Promise<void>): void {
     const isEdit = Boolean(kc);
     const title = isEdit ? 'Edit Class' : 'New Class';
     const submitLabel = isEdit ? 'Save' : 'Create';
@@ -760,8 +602,20 @@ function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass 
                     <form id="class-form">
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label class="form-label" for="class-name">Name</label>
+                            <label class="form-label" for="class-name">Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="class-name" value="${esc(kc?.name ?? '')}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="class-chassis">Chassis</label>
+                            <input type="text" class="form-control" id="class-chassis" value="${esc(kc?.chassis ?? '')}" placeholder="e.g. Sodi RT8 EVO">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="class-engine">Engine</label>
+                            <input type="text" class="form-control" id="class-engine" value="${esc(kc?.engine ?? '')}" placeholder="e.g. Honda GX390">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="class-desc">Description</label>
+                            <textarea class="form-control" id="class-desc" rows="2" placeholder="Any additional details about this class">${esc(kc?.description ?? '')}</textarea>
                         </div>
                         <div class="form-check mb-3">
                             <input type="checkbox" class="form-check-input" id="class-default" ${shouldDefault ? 'checked' : ''}>
@@ -821,6 +675,12 @@ function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass 
             return;
         }
         const name = nameInput.value.trim();
+        const chassisEl = document.getElementById('class-chassis');
+        const chassis = chassisEl instanceof HTMLInputElement ? chassisEl.value.trim() : '';
+        const engineEl = document.getElementById('class-engine');
+        const engine = engineEl instanceof HTMLInputElement ? engineEl.value.trim() : '';
+        const descEl = document.getElementById('class-desc');
+        const description = descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : '';
         const defaultCheck = document.getElementById('class-default');
         const isDefault = defaultCheck instanceof HTMLInputElement ? defaultCheck.checked : false;
 
@@ -835,11 +695,17 @@ function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass 
             if (isEdit && kc) {
                 await api.put(`/api/tracks/${trackId}/classes/${kc.class_id}`, {
                     name,
+                    chassis,
+                    engine,
+                    description,
                     isDefault: isDefault,
                 });
             } else {
                 await api.post(`/api/tracks/${trackId}/classes`, {
                     name,
+                    chassis,
+                    engine,
+                    description,
                     is_default: isDefault,
                 });
             }
@@ -874,7 +740,6 @@ function showClassModal(trackId: string, allClasses: KartClass[], kc: KartClass 
 }
 
 const SESSION_TYPES = ['practice', 'quali', 'heat', 'race', 'final', 'driver_meeting'];
-const typeLabel = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 function sessionRowHtml(s: FormatSession, idx: number, layouts: Layout[], classes: KartClass[]): string {
     const typeOptions = SESSION_TYPES.map(t =>
@@ -887,9 +752,10 @@ function sessionRowHtml(s: FormatSession, idx: number, layouts: Layout[], classe
 
     const classCheckboxes = classes.map(kc => {
         const checked = s.class_ids?.includes(kc.class_id) ?? kc.is_default;
+        const cbId = `sess-${idx}-class-${kc.class_id}`;
         return `<div class="form-check form-check-inline mb-0">
-            <input type="checkbox" class="form-check-input sess-class" data-class-id="${kc.class_id}" ${checked ? 'checked' : ''}>
-            <label class="form-check-label small">${esc(kc.name)}</label>
+            <input type="checkbox" class="form-check-input sess-class" id="${cbId}" data-class-id="${kc.class_id}" ${checked ? 'checked' : ''}>
+            <label class="form-check-label small" for="${cbId}">${esc(kc.name)}</label>
         </div>`;
     }).join('');
 
@@ -1029,7 +895,7 @@ function bindSessionListEvents(listEl: HTMLElement): void {
     });
 }
 
-function showFormatModal(trackId: string, layouts: Layout[], classes: KartClass[], format: Format | undefined, onSave: () => Promise<void>): void {
+export function showFormatModal(trackId: string, layouts: Layout[], classes: KartClass[], format: Format | undefined, onSave: () => Promise<void>): void {
     const isEdit = Boolean(format);
     const title = isEdit ? 'Edit Format' : 'New Format';
     const submitLabel = isEdit ? 'Save' : 'Create';

@@ -1,15 +1,27 @@
-import { api } from './api';
-import { trackDetailUrl } from './track-detail';
+import { api, assetsBase } from './api';
+import { esc, emptyState, formatDate, typeBadge } from './html';
+import { trackDetailUrl, eventDetailUrl, championshipDetailUrl, seriesDetailUrl } from './url-utils';
+
+interface SeriesContext {
+    series_id: string;
+    series_name: string;
+    championship_id: string;
+    championship_name: string;
+    championship_logo_key?: string;
+    round_number: number;
+}
 
 interface Event {
     event_id: string;
     track_id: string;
     track_name: string;
+    track_logo_key?: string;
     name: string;
     description?: string;
     event_type?: string;
     start_time: string;
     end_time?: string;
+    series?: SeriesContext[];
     created_at: string;
 }
 
@@ -18,47 +30,39 @@ interface EventsResponse {
     recent: Event[];
 }
 
-const dateFmt = new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-});
-
-function formatDate(iso: string): string {
-    return dateFmt.format(new Date(iso));
-}
-
-function typeBadge(eventType?: string): string {
-    if (!eventType) {
+function seriesBadges(event: Event): string {
+    if (!event.series || event.series.length === 0) {
         return '';
     }
-    return `<span class="badge text-bg-secondary">${eventType}</span>`;
+    return event.series.map(s =>
+        `<a href="${championshipDetailUrl(s.championship_id, s.championship_name)}" class="badge text-bg-info text-decoration-none d-inline-flex align-items-center gap-1">${s.championship_logo_key ?
+            `<img src="${assetsBase}/${s.championship_logo_key}" alt="" width="14" height="14" class="rounded" style="object-fit:cover">` :
+            ''
+        }${esc(s.championship_name)}</a>` +
+        `<a href="${seriesDetailUrl(s.series_id, s.series_name)}" class="badge text-bg-warning text-decoration-none">${esc(s.series_name)}</a>`,
+    ).join('');
 }
 
-function eventCard(event: Event): string {
+function eventRow(event: Event): string {
     return `
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">${event.name}</h5>
-                    <p class="card-text text-body-secondary small mb-2">
-                        <i class="fa-solid fa-location-dot me-1"></i><a href="${trackDetailUrl(event.track_id, event.track_name)}" class="text-body-secondary" data-track-hover="${event.track_id}">${event.track_name}</a>
-                    </p>
-                    <p class="card-text text-body-secondary small mb-2">
-                        <i class="fa-solid fa-clock me-1"></i>${formatDate(event.start_time)}${event.end_time ? ` — ${formatDate(event.end_time)}` : ''}
-                    </p>
-                    ${event.description ? `<p class="card-text small">${event.description}</p>` : ''}
-                    <div class="d-flex gap-2 mt-2">${typeBadge(event.event_type)}</div>
+        <div class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+            <div class="flex-grow-1">
+                <a href="${eventDetailUrl(event.event_id, event.name)}" class="fw-semibold text-decoration-none">${esc(event.name)}</a>
+                <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                    ${typeBadge(event.event_type)}
+                    ${seriesBadges(event)}
                 </div>
             </div>
+            <a href="${trackDetailUrl(event.track_id, event.track_name)}" class="d-flex align-items-center gap-1 text-body-secondary text-decoration-none small text-nowrap" data-track-hover="${event.track_id}">
+                ${event.track_logo_key ?
+                    `<img src="${assetsBase}/${event.track_logo_key}" alt="" width="20" height="20" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                    '<i class="fa-solid fa-flag-checkered"></i>'}
+                ${esc(event.track_name)}
+            </a>
+            <div class="text-body-secondary small text-nowrap">
+                <i class="fa-solid fa-clock me-1"></i>${formatDate(event.start_time)}
+            </div>
         </div>`;
-}
-
-function emptyState(message: string): string {
-    return `<div class="col-12"><p class="text-body-secondary text-center py-3">${message}</p></div>`;
 }
 
 export async function renderEvents(container: HTMLElement): Promise<void> {
@@ -73,17 +77,17 @@ export async function renderEvents(container: HTMLElement): Promise<void> {
         return;
     }
 
-    const upcomingCards = data.upcoming.length > 0 ?
-        data.upcoming.map(eventCard).join('') :
+    const upcomingRows = data.upcoming.length > 0 ?
+        `<div class="list-group">${data.upcoming.map(eventRow).join('')}</div>` :
         emptyState('No upcoming events.');
 
-    const recentCards = data.recent.length > 0 ?
-        data.recent.map(eventCard).join('') :
+    const recentRows = data.recent.length > 0 ?
+        `<div class="list-group">${data.recent.map(eventRow).join('')}</div>` :
         emptyState('No recent events.');
 
     container.innerHTML = `
         <h2 class="mb-3">Upcoming Events</h2>
-        <div class="row g-3 mb-5">${upcomingCards}</div>
-        <h2 class="mb-3">Recent Events</h2>
-        <div class="row g-3">${recentCards}</div>`;
+        ${upcomingRows}
+        <h2 class="mb-3 mt-5">Recent Events</h2>
+        ${recentRows}`;
 }

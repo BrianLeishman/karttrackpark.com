@@ -163,8 +163,10 @@ func handleGetTrackPublic(w http.ResponseWriter, r *http.Request) {
 	resp := trackPublicResponse{Track: *track}
 	if defaultLayout != nil {
 		resp.TrackOutline = defaultLayout.TrackOutline
-		resp.Annotations = defaultLayout.Annotations
+		// Merge track-level turns with layout-level start_finish
+		resp.Annotations = append(resp.Annotations, defaultLayout.Annotations...)
 	}
+	resp.Annotations = append(resp.Annotations, track.Turns...)
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -230,7 +232,7 @@ func handleUpdateTrack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only allow updating safe fields
-	allowed := map[string]bool{"name": true, "logoKey": true, "email": true, "phone": true, "city": true, "state": true, "timezone": true, "website": true, "facebook": true, "instagram": true, "youtube": true, "tiktok": true, "mapBounds": true}
+	allowed := map[string]bool{"name": true, "logoKey": true, "email": true, "phone": true, "city": true, "state": true, "timezone": true, "website": true, "facebook": true, "instagram": true, "youtube": true, "tiktok": true, "mapBounds": true, "turns": true}
 	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
@@ -250,6 +252,25 @@ func handleUpdateTrack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fields["phone"] = normalized
+	}
+
+	// Validate turns if provided
+	if raw, ok := fields["turns"]; ok {
+		b, err := json.Marshal(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid turns")
+			return
+		}
+		var turns []dynamo.TrackAnnotation
+		if err := json.Unmarshal(b, &turns); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid turns")
+			return
+		}
+		if err := validateTurns(turns); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		fields["turns"] = turns
 	}
 
 	if err := dynamo.UpdateTrack(r.Context(), trackID, fields); err != nil {
@@ -484,8 +505,11 @@ func handleCreateKartClass(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name      string `json:"name"`
-		IsDefault bool   `json:"is_default"`
+		Name        string `json:"name"`
+		Chassis     string `json:"chassis"`
+		Engine      string `json:"engine"`
+		Description string `json:"description"`
+		IsDefault   bool   `json:"is_default"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -517,9 +541,12 @@ func handleCreateKartClass(w http.ResponseWriter, r *http.Request) {
 	}
 
 	kc, err := dynamo.CreateKartClass(r.Context(), dynamo.KartClass{
-		TrackID:   trackID,
-		Name:      req.Name,
-		IsDefault: req.IsDefault,
+		TrackID:     trackID,
+		Name:        req.Name,
+		Chassis:     req.Chassis,
+		Engine:      req.Engine,
+		Description: req.Description,
+		IsDefault:   req.IsDefault,
 	})
 	if err != nil {
 		log.Printf("create kart class error: %v", err)
@@ -582,7 +609,7 @@ func handleUpdateKartClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := map[string]bool{"name": true, "isDefault": true}
+	allowed := map[string]bool{"name": true, "chassis": true, "engine": true, "description": true, "isDefault": true}
 	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
@@ -634,24 +661,29 @@ func handleDeleteKartClass(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// validateAnnotations checks that all annotations have valid type and position values.
-func validateAnnotations(annotations []dynamo.TrackAnnotation) error {
-	sfCount := 0
+// validateAnnotationList checks that all annotations match the expected type and have valid positions.
+// Pass maxCount=0 for no limit.
+func validateAnnotationList(annotations []dynamo.TrackAnnotation, expectedType string, maxCount int) error {
 	for _, a := range annotations {
-		if a.Type != "turn" && a.Type != "start_finish" {
-			return fmt.Errorf("invalid annotation type: %q", a.Type)
+		if a.Type != expectedType {
+			return fmt.Errorf("expected annotation type %q, got %q", expectedType, a.Type)
 		}
 		if a.Position < 0 || a.Position > 1 {
 			return fmt.Errorf("annotation position must be 0.0-1.0")
 		}
-		if a.Type == "start_finish" {
-			sfCount++
-		}
 	}
-	if sfCount > 1 {
-		return fmt.Errorf("at most one start_finish annotation allowed")
+	if maxCount > 0 && len(annotations) > maxCount {
+		return fmt.Errorf("at most %d %s annotation(s) allowed", maxCount, expectedType)
 	}
 	return nil
+}
+
+func validateAnnotations(annotations []dynamo.TrackAnnotation) error {
+	return validateAnnotationList(annotations, "start_finish", 1)
+}
+
+func validateTurns(turns []dynamo.TrackAnnotation) error {
+	return validateAnnotationList(turns, "turn", 0)
 }
 
 // unsetDefaultKartClass clears isDefault on the current default kart class for a track.

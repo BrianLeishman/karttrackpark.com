@@ -13,19 +13,20 @@ import (
 )
 
 type Event struct {
-	PK          string `dynamodbav:"pk" json:"-"`
-	SK          string `dynamodbav:"sk" json:"-"`
-	EventID     string `dynamodbav:"eventId" json:"event_id"`
-	TrackID     string `dynamodbav:"trackId" json:"track_id"`
-	TrackName   string `dynamodbav:"trackName" json:"track_name"`
-	Name        string `dynamodbav:"name" json:"name"`
-	Description string `dynamodbav:"description,omitempty" json:"description,omitempty"`
-	EventType   string `dynamodbav:"eventType,omitempty" json:"event_type,omitempty"`
-	StartTime   string `dynamodbav:"startTime" json:"start_time"`
-	EndTime     string `dynamodbav:"endTime,omitempty" json:"end_time,omitempty"`
-	GSI1PK      string `dynamodbav:"gsi1pk,omitempty" json:"-"`
-	GSI1SK      string `dynamodbav:"gsi1sk,omitempty" json:"-"`
-	CreatedAt   string `dynamodbav:"createdAt" json:"created_at"`
+	PK           string `dynamodbav:"pk" json:"-"`
+	SK           string `dynamodbav:"sk" json:"-"`
+	EventID      string `dynamodbav:"eventId" json:"event_id"`
+	TrackID      string `dynamodbav:"trackId" json:"track_id"`
+	TrackName    string `dynamodbav:"trackName" json:"track_name"`
+	TrackLogoKey string `dynamodbav:"trackLogoKey,omitempty" json:"track_logo_key,omitempty"`
+	Name         string `dynamodbav:"name" json:"name"`
+	Description  string `dynamodbav:"description,omitempty" json:"description,omitempty"`
+	EventType    string `dynamodbav:"eventType,omitempty" json:"event_type,omitempty"`
+	StartTime    string `dynamodbav:"startTime" json:"start_time"`
+	EndTime      string `dynamodbav:"endTime,omitempty" json:"end_time,omitempty"`
+	GSI1PK       string `dynamodbav:"gsi1pk,omitempty" json:"-"`
+	GSI1SK       string `dynamodbav:"gsi1sk,omitempty" json:"-"`
+	CreatedAt    string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 func CreateEvent(ctx context.Context, e Event) (*Event, error) {

@@ -1,6 +1,7 @@
 import { api } from './api';
 import { getUser } from './auth';
-import { seriesDetailUrl } from './series-detail';
+import { esc } from './html';
+import { seriesDetailUrl } from './url-utils';
 
 interface Series {
     series_id: string;
@@ -9,10 +10,6 @@ interface Series {
     description?: string;
     status?: string;
     rules?: string;
-}
-
-function esc(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export async function renderSeriesEdit(container: HTMLElement): Promise<void> {

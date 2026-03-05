@@ -14,23 +14,24 @@ import (
 )
 
 type Track struct {
-	PK        string `dynamodbav:"pk" json:"-"`
-	SK        string `dynamodbav:"sk" json:"-"`
-	TrackID   string `dynamodbav:"trackId" json:"track_id"`
-	Name      string `dynamodbav:"name" json:"name"`
-	LogoKey   string `dynamodbav:"logoKey" json:"logo_key"`
-	MapBounds string `dynamodbav:"mapBounds,omitempty" json:"map_bounds,omitempty"`
-	Email     string `dynamodbav:"email" json:"email"`
-	Phone     string `dynamodbav:"phone" json:"phone"`
-	City      string `dynamodbav:"city,omitempty" json:"city,omitempty"`
-	State     string `dynamodbav:"state,omitempty" json:"state,omitempty"`
-	Timezone  string `dynamodbav:"timezone,omitempty" json:"timezone,omitempty"`
-	Website   string `dynamodbav:"website,omitempty" json:"website,omitempty"`
-	Facebook  string `dynamodbav:"facebook,omitempty" json:"facebook,omitempty"`
-	Instagram string `dynamodbav:"instagram,omitempty" json:"instagram,omitempty"`
-	YouTube   string `dynamodbav:"youtube,omitempty" json:"youtube,omitempty"`
-	TikTok    string `dynamodbav:"tiktok,omitempty" json:"tiktok,omitempty"`
-	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
+	PK        string            `dynamodbav:"pk" json:"-"`
+	SK        string            `dynamodbav:"sk" json:"-"`
+	TrackID   string            `dynamodbav:"trackId" json:"track_id"`
+	Name      string            `dynamodbav:"name" json:"name"`
+	LogoKey   string            `dynamodbav:"logoKey" json:"logo_key"`
+	MapBounds string            `dynamodbav:"mapBounds,omitempty" json:"map_bounds,omitempty"`
+	Email     string            `dynamodbav:"email" json:"email"`
+	Phone     string            `dynamodbav:"phone" json:"phone"`
+	City      string            `dynamodbav:"city,omitempty" json:"city,omitempty"`
+	State     string            `dynamodbav:"state,omitempty" json:"state,omitempty"`
+	Timezone  string            `dynamodbav:"timezone,omitempty" json:"timezone,omitempty"`
+	Website   string            `dynamodbav:"website,omitempty" json:"website,omitempty"`
+	Facebook  string            `dynamodbav:"facebook,omitempty" json:"facebook,omitempty"`
+	Instagram string            `dynamodbav:"instagram,omitempty" json:"instagram,omitempty"`
+	YouTube   string            `dynamodbav:"youtube,omitempty" json:"youtube,omitempty"`
+	TikTok    string            `dynamodbav:"tiktok,omitempty" json:"tiktok,omitempty"`
+	Turns     []TrackAnnotation `dynamodbav:"turns,omitempty" json:"turns,omitempty"`
+	CreatedAt string            `dynamodbav:"createdAt" json:"created_at"`
 }
 
 type TrackMember struct {
@@ -61,8 +62,9 @@ type TrackAnnotation struct {
 	Type     string  `dynamodbav:"type" json:"type"` // "turn" or "start_finish"
 	Lat      float64 `dynamodbav:"lat" json:"lat"`
 	Lng      float64 `dynamodbav:"lng" json:"lng"`
-	Position float64 `dynamodbav:"position" json:"position"`             // 0.0-1.0 fraction along outline
-	Name     string  `dynamodbav:"name,omitempty" json:"name,omitempty"` // optional e.g. "Hairpin"
+	Position float64 `dynamodbav:"position" json:"position"`                 // 0.0-1.0 fraction along outline
+	Name     string  `dynamodbav:"name,omitempty" json:"name,omitempty"`     // optional e.g. "Hairpin"
+	Number   int     `dynamodbav:"number,omitempty" json:"number,omitempty"` // manually assigned turn number
 }
 
 type Layout struct {
@@ -78,13 +80,16 @@ type Layout struct {
 }
 
 type KartClass struct {
-	PK        string `dynamodbav:"pk" json:"-"`
-	SK        string `dynamodbav:"sk" json:"-"`
-	ClassID   string `dynamodbav:"classId" json:"class_id"`
-	TrackID   string `dynamodbav:"trackId" json:"track_id"`
-	Name      string `dynamodbav:"name" json:"name"`
-	IsDefault bool   `dynamodbav:"isDefault,omitempty" json:"is_default,omitempty"`
-	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
+	PK          string `dynamodbav:"pk" json:"-"`
+	SK          string `dynamodbav:"sk" json:"-"`
+	ClassID     string `dynamodbav:"classId" json:"class_id"`
+	TrackID     string `dynamodbav:"trackId" json:"track_id"`
+	Name        string `dynamodbav:"name" json:"name"`
+	Chassis     string `dynamodbav:"chassis,omitempty" json:"chassis,omitempty"`
+	Engine      string `dynamodbav:"engine,omitempty" json:"engine,omitempty"`
+	Description string `dynamodbav:"description,omitempty" json:"description,omitempty"`
+	IsDefault   bool   `dynamodbav:"isDefault,omitempty" json:"is_default,omitempty"`
+	CreatedAt   string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 // CreateTrack creates a track and adds the creator as owner in a transaction.

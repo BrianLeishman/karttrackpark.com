@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { Modal } from 'bootstrap';
-import { api } from './api';
+import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { slugify, trackDetailUrl } from './track-detail';
-import { championshipDetailUrl } from './championship-detail';
+import { esc, statusColor, typeLabel } from './html';
+import { getEntityId, ensureCorrectSlug, trackDetailUrl, championshipDetailUrl, eventDetailUrl } from './url-utils';
 
 interface Series {
     series_id: string;
@@ -69,43 +69,7 @@ interface Format {
     sessions: FormatSession[];
 }
 
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
-    'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
-
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
-    'https://assets.karttrackpark.com';
-
-function isHugoServer(): boolean {
-    return document.querySelector<HTMLMetaElement>('meta[name="hugo-server"]')?.content === 'true';
-}
-
-function getSeriesId(): string | null {
-    if (isHugoServer()) {
-        return new URLSearchParams(window.location.search).get('id');
-    }
-    const match = /^\/series\/([a-z0-9]+)/.exec(window.location.pathname);
-    return match?.[1] ?? null;
-}
-
-export function seriesDetailUrl(seriesId: string, name: string): string {
-    if (isHugoServer()) {
-        return `/series/?id=${seriesId}`;
-    }
-    return `/series/${seriesId}/${slugify(name)}`;
-}
-
-const typeLabel = (t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-function esc(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function statusColor(status?: string): string {
-    const map: Record<string, string> = {
-        active: 'success', upcoming: 'warning', completed: 'info', archived: 'secondary',
-    };
-    return map[status ?? ''] ?? 'secondary';
-}
+export { seriesDetailUrl } from './url-utils';
 
 const shortDate = new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -115,22 +79,8 @@ const shortDate = new Intl.DateTimeFormat(undefined, {
     minute: '2-digit',
 });
 
-function ensureCorrectSlug(series: Series): boolean {
-    if (isHugoServer()) {
-        return false;
-    }
-    const expectedSlug = slugify(series.name);
-    const pathParts = window.location.pathname.split('/');
-    const currentSlug = pathParts[3] ?? '';
-    if (currentSlug !== expectedSlug) {
-        window.location.replace(`/series/${series.series_id}/${expectedSlug}`);
-        return true;
-    }
-    return false;
-}
-
 export async function renderSeriesDetail(container: HTMLElement): Promise<void> {
-    const seriesId = getSeriesId();
+    const seriesId = getEntityId('series');
     if (!seriesId) {
         container.innerHTML = '<div class="alert alert-warning">No series ID specified.</div>';
         return;
@@ -161,7 +111,7 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
         return;
     }
 
-    if (ensureCorrectSlug(series)) {
+    if (ensureCorrectSlug('series', series.series_id, series.name)) {
         return;
     }
 
@@ -206,7 +156,7 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
         events.map(ev => `
             <div class="d-flex align-items-center gap-2 py-2 border-bottom">
                 <span class="badge rounded-pill font-monospace" style="background:var(--bs-tertiary-bg);color:var(--bs-secondary-color);min-width:2.5rem">R${ev.round_number}</span>
-                <span class="flex-grow-1">${esc(ev.event_name ?? 'Unnamed event')}</span>
+                <a href="${eventDetailUrl(ev.event_id, ev.event_name ?? 'event')}" class="flex-grow-1 text-decoration-none">${esc(ev.event_name ?? 'Unnamed event')}</a>
                 ${ev.start_time ? `<span class="text-body-secondary small">${shortDate.format(new Date(ev.start_time))}</span>` : ''}
             </div>`).join('') :
         '<p class="text-body-secondary">No events linked yet.</p>';

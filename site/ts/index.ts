@@ -2,6 +2,7 @@ import 'bootstrap';
 import { handleCallback, getUser, login, logout } from './auth';
 import { renderChampionshipDetail } from './championship-detail';
 import { renderChampionshipEdit } from './championship-edit';
+import { renderEventDetail } from './event-detail';
 import { renderEvents } from './events';
 import { renderKeys } from './keys';
 import { renderSeriesDetail } from './series-detail';
@@ -48,6 +49,11 @@ async function init(): Promise<void> {
     const seriesDetail = document.getElementById('series-detail');
     if (seriesDetail) {
         void renderSeriesDetail(seriesDetail);
+    }
+
+    const eventDetail = document.getElementById('event-detail');
+    if (eventDetail) {
+        void renderEventDetail(eventDetail);
     }
 
     // Track hover cards (works for all users, including anonymous)

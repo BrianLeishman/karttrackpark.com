@@ -1,8 +1,11 @@
 import axios from 'axios';
 import { getAccessToken, clearTokens } from './auth';
 
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
+export const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
     'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
+
+export const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
+    'https://assets.karttrackpark.com';
 
 export const api = axios.create({
     baseURL: apiBase,

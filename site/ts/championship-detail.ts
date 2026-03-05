@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { Modal } from 'bootstrap';
-import { api } from './api';
+import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { slugify, trackDetailUrl } from './track-detail';
+import { esc, statusColor } from './html';
+import { getEntityId, ensureCorrectSlug, trackDetailUrl, seriesDetailUrl as seriesUrl } from './url-utils';
+export { championshipDetailUrl } from './url-utils';
 
 interface Championship {
     championship_id: string;
@@ -32,65 +34,8 @@ interface TrackAuth {
     role: string;
 }
 
-const apiBase = document.querySelector<HTMLMetaElement>('meta[name="api-base"]')?.content ??
-    'https://62lt3y3apd.execute-api.us-east-1.amazonaws.com';
-
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
-    'https://assets.karttrackpark.com';
-
-function isHugoServer(): boolean {
-    return document.querySelector<HTMLMetaElement>('meta[name="hugo-server"]')?.content === 'true';
-}
-
-function getChampId(): string | null {
-    if (isHugoServer()) {
-        return new URLSearchParams(window.location.search).get('id');
-    }
-    const match = /^\/championships\/([a-z0-9]+)/.exec(window.location.pathname);
-    return match?.[1] ?? null;
-}
-
-export function championshipDetailUrl(champId: string, name: string): string {
-    if (isHugoServer()) {
-        return `/championships/?id=${champId}`;
-    }
-    return `/championships/${champId}/${slugify(name)}`;
-}
-
-function seriesUrl(seriesId: string, name: string): string {
-    if (isHugoServer()) {
-        return `/series/?id=${seriesId}`;
-    }
-    return `/series/${seriesId}/${slugify(name)}`;
-}
-
-function esc(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function statusColor(status?: string): string {
-    const map: Record<string, string> = {
-        active: 'success', upcoming: 'warning', completed: 'info', archived: 'secondary',
-    };
-    return map[status ?? ''] ?? 'secondary';
-}
-
-function ensureCorrectSlug(champ: Championship): boolean {
-    if (isHugoServer()) {
-        return false;
-    }
-    const expectedSlug = slugify(champ.name);
-    const pathParts = window.location.pathname.split('/');
-    const currentSlug = pathParts[3] ?? '';
-    if (currentSlug !== expectedSlug) {
-        window.location.replace(`/championships/${champ.championship_id}/${expectedSlug}`);
-        return true;
-    }
-    return false;
-}
-
 export async function renderChampionshipDetail(container: HTMLElement): Promise<void> {
-    const champId = getChampId();
+    const champId = getEntityId('championships');
     if (!champId) {
         container.innerHTML = '<div class="alert alert-warning">No championship ID specified.</div>';
         return;
@@ -118,7 +63,7 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
         return;
     }
 
-    if (ensureCorrectSlug(champ)) {
+    if (ensureCorrectSlug('championships', champ.championship_id, champ.name)) {
         return;
     }
 

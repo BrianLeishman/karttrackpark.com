@@ -1,7 +1,6 @@
+import { assetsBase } from './api';
 import { showCropModal } from './crop-modal';
-
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
-    'https://assets.karttrackpark.com';
+import { esc } from './html';
 
 export interface ChampionshipFormValues {
     name?: string;
@@ -18,10 +17,6 @@ export interface ChampionshipFormBindings {
     logoInput: HTMLInputElement;
     logoPreview: HTMLElement;
     croppedBlob: Blob | null;
-}
-
-function escAttr(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export function championshipFormHtml(opts: ChampionshipFormOptions): string {
@@ -47,11 +42,11 @@ export function championshipFormHtml(opts: ChampionshipFormOptions): string {
         </div>
         <div class="mb-3">
             <label class="form-label" for="${p}-name">Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="${p}-name" value="${escAttr(v.name ?? '')}" required>
+            <input type="text" class="form-control" id="${p}-name" value="${esc(v.name ?? '')}" required>
         </div>
         <div class="mb-3">
             <label class="form-label" for="${p}-desc">Description</label>
-            <textarea class="form-control" id="${p}-desc" rows="2">${escAttr(v.description ?? '')}</textarea>
+            <textarea class="form-control" id="${p}-desc" rows="2">${esc(v.description ?? '')}</textarea>
         </div>`;
 }
 

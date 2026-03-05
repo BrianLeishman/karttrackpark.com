@@ -1,12 +1,9 @@
 import axios from 'axios';
 import { parsePhoneNumberWithError, ParseError } from 'libphonenumber-js';
 import { Modal } from 'bootstrap';
-import { api } from './api';
-import { trackDetailUrl } from './track-detail';
+import { api, assetsBase } from './api';
+import { trackDetailUrl } from './url-utils';
 import { trackFormFieldsHtml, bindTrackForm, collectTrackFields } from './track-form';
-
-const assetsBase = document.querySelector<HTMLMetaElement>('meta[name="assets-base"]')?.content ??
-    'https://assets.karttrackpark.com';
 
 interface Track {
     track_id: string;

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -8,17 +9,78 @@ import (
 	"github.com/BrianLeishman/karttrackpark.com/go/dynamo"
 )
 
+type seriesContext struct {
+	SeriesID            string `json:"series_id"`
+	SeriesName          string `json:"series_name"`
+	ChampionshipID      string `json:"championship_id"`
+	ChampionshipName    string `json:"championship_name"`
+	ChampionshipLogoKey string `json:"championship_logo_key,omitempty"`
+	RoundNumber         int    `json:"round_number"`
+}
+
+type eventWithContext struct {
+	dynamo.Event
+	Series []seriesContext `json:"series,omitempty"`
+}
+
+// buildSeriesContextMap walks championships → series → series events for a track
+// and returns a map from eventID to its series contexts.
+func buildSeriesContextMap(ctx context.Context, trackID string) map[string][]seriesContext {
+	eventMap := map[string][]seriesContext{}
+
+	champs, err := dynamo.ListChampionshipsForTrack(ctx, trackID)
+	if err != nil {
+		log.Printf("enrich: list championships error: %v", err)
+		return eventMap
+	}
+
+	for _, c := range champs {
+		seriesList, err := dynamo.ListSeriesForChampionship(ctx, c.ChampionshipID)
+		if err != nil {
+			log.Printf("enrich: list series error: %v", err)
+			continue
+		}
+		for _, s := range seriesList {
+			seriesEvents, err := dynamo.ListSeriesEvents(ctx, s.SeriesID)
+			if err != nil {
+				log.Printf("enrich: list series events error: %v", err)
+				continue
+			}
+			for _, se := range seriesEvents {
+				eventMap[se.EventID] = append(eventMap[se.EventID], seriesContext{
+					SeriesID:            s.SeriesID,
+					SeriesName:          s.Name,
+					ChampionshipID:      c.ChampionshipID,
+					ChampionshipName:    c.Name,
+					ChampionshipLogoKey: c.LogoKey,
+					RoundNumber:         se.RoundNumber,
+				})
+			}
+		}
+	}
+
+	return eventMap
+}
+
+func applySeriesContext(events []dynamo.Event, ctxMap map[string][]seriesContext) []eventWithContext {
+	result := make([]eventWithContext, len(events))
+	for i, e := range events {
+		result[i] = eventWithContext{Event: e, Series: ctxMap[e.EventID]}
+	}
+	return result
+}
+
 func handleListEvents(w http.ResponseWriter, r *http.Request) {
 	trackID := r.URL.Query().Get("track_id")
 
-	upcoming, err := dynamo.ListUpcomingEvents(r.Context(), 10, trackID)
+	upcoming, err := dynamo.ListUpcomingEvents(r.Context(), 50, trackID)
 	if err != nil {
 		log.Printf("list upcoming events error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	recent, err := dynamo.ListRecentEvents(r.Context(), 10, trackID)
+	recent, err := dynamo.ListRecentEvents(r.Context(), 50, trackID)
 	if err != nil {
 		log.Printf("list recent events error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -32,9 +94,30 @@ func handleListEvents(w http.ResponseWriter, r *http.Request) {
 		recent = []dynamo.Event{}
 	}
 
+	if trackID != "" {
+		ctxMap := buildSeriesContextMap(r.Context(), trackID)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"upcoming": applySeriesContext(upcoming, ctxMap),
+			"recent":   applySeriesContext(recent, ctxMap),
+		})
+		return
+	}
+
+	// Global events list: build context maps per unique track
+	allEvents := append(upcoming, recent...)
+	trackIDs := map[string]bool{}
+	for _, e := range allEvents {
+		trackIDs[e.TrackID] = true
+	}
+	merged := map[string][]seriesContext{}
+	for tid := range trackIDs {
+		for k, v := range buildSeriesContextMap(r.Context(), tid) {
+			merged[k] = v
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"upcoming": upcoming,
-		"recent":   recent,
+		"upcoming": applySeriesContext(upcoming, merged),
+		"recent":   applySeriesContext(recent, merged),
 	})
 }
 
@@ -52,7 +135,8 @@ func handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, event)
+	ctxMap := buildSeriesContextMap(r.Context(), event.TrackID)
+	writeJSON(w, http.StatusOK, eventWithContext{Event: *event, Series: ctxMap[event.EventID]})
 }
 
 func handleCreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -102,13 +186,14 @@ func handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	event, err := dynamo.CreateEvent(r.Context(), dynamo.Event{
-		TrackID:     trackID,
-		TrackName:   track.Name,
-		Name:        req.Name,
-		Description: req.Description,
-		EventType:   req.EventType,
-		StartTime:   req.StartTime,
-		EndTime:     req.EndTime,
+		TrackID:      trackID,
+		TrackName:    track.Name,
+		TrackLogoKey: track.LogoKey,
+		Name:         req.Name,
+		Description:  req.Description,
+		EventType:    req.EventType,
+		StartTime:    req.StartTime,
+		EndTime:      req.EndTime,
 	})
 	if err != nil {
 		log.Printf("create event error: %v", err)
