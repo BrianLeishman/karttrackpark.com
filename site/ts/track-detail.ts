@@ -134,7 +134,7 @@ function eventRow(event: TrackEvent): string {
     return `
         <div class="d-flex align-items-center gap-2 py-2 border-bottom">
             <div class="flex-grow-1">
-                <a href="${eventDetailUrl(event.event_id, event.name, event.series?.[0])}" class="fw-semibold text-decoration-none">${esc(event.name)}</a>
+                <a href="${eventDetailUrl(event.event_id, event.name, event.series?.[0])}" class="fw-semibold">${esc(event.name)}</a>
                 <div class="d-flex flex-wrap gap-1 mt-1">
                     ${typeBadge(event.event_type)}
                     ${seriesBadges(event)}
@@ -239,13 +239,13 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
 
     const contactItems: string[] = [];
     if (track.email) {
-        contactItems.push(`<a href="mailto:${track.email}" class="text-body-secondary text-decoration-none"><i class="fa-solid fa-envelope me-1"></i>${track.email}</a>`);
+        contactItems.push(`<a href="mailto:${track.email}" class="text-body-secondary"><i class="fa-solid fa-envelope me-1"></i>${track.email}</a>`);
     }
     if (phone) {
-        contactItems.push(`<a href="${phone.href}" class="text-body-secondary text-decoration-none"><i class="fa-solid fa-phone me-1"></i>${phone.display}</a>`);
+        contactItems.push(`<a href="${phone.href}" class="text-body-secondary"><i class="fa-solid fa-phone me-1"></i>${phone.display}</a>`);
     }
     if (track.website) {
-        contactItems.push(`<a href="${track.website}" target="_blank" rel="noopener" class="text-body-secondary text-decoration-none"><i class="fa-solid fa-globe me-1"></i>${track.website}</a>`);
+        contactItems.push(`<a href="${track.website}" target="_blank" rel="noopener" class="text-body-secondary"><i class="fa-solid fa-globe me-1"></i>${track.website}</a>`);
     }
 
     const PAGE_SIZE = 5;

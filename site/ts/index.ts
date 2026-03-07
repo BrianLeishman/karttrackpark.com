@@ -7,6 +7,7 @@ import { renderEvents } from './events';
 import { renderKeys } from './keys';
 import { renderSeriesDetail } from './series-detail';
 import { renderSeriesEdit } from './series-edit';
+import { renderSessionDetail } from './session-detail';
 import { renderTrackDetail } from './track-detail';
 import { renderTrackEdit } from './track-edit';
 import { initTrackHoverCards } from './track-hover';
@@ -54,6 +55,11 @@ async function init(): Promise<void> {
     const eventDetail = document.getElementById('event-detail');
     if (eventDetail) {
         void renderEventDetail(eventDetail);
+    }
+
+    const sessionDetail = document.getElementById('session-detail');
+    if (sessionDetail) {
+        void renderSessionDetail(sessionDetail);
     }
 
     // Track hover cards (works for all users, including anonymous)

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Modal } from 'bootstrap';
 import { api, apiBase, assetsBase } from './api';
-import { getAccessToken } from './auth';
+import { getAccessToken, isLoggedIn } from './auth';
 import { esc, typeLabel } from './html';
 import { getEntityId, ensureCorrectSlug, trackDetailUrl, championshipDetailUrl, eventDetailUrl } from './url-utils';
 
@@ -12,6 +12,15 @@ interface Series {
     name: string;
     description?: string;
     rules?: string;
+    registration_mode?: string;
+    max_spots?: number;
+    price_cents?: number;
+    currency?: string;
+    registration_deadline?: string;
+    method?: string;
+    points_scheme?: number[];
+    drop_rounds?: number;
+    tiebreaker?: string;
     created_at: string;
 }
 
@@ -43,6 +52,20 @@ interface SeriesDriver {
     driver_name: string;
     seeded: boolean;
     total_points?: number;
+    created_at: string;
+}
+
+interface Registration {
+    parent_type: string;
+    parent_id: string;
+    track_id: string;
+    uid: string;
+    driver_name: string;
+    status: string;
+    paid?: boolean;
+    price_cents?: number;
+    standings?: Record<string, unknown>;
+    registered_at: string;
     created_at: string;
 }
 
@@ -90,17 +113,20 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
     let series: Series;
     let events: SeriesEvent[];
     let drivers: SeriesDriver[];
+    let registrations: Registration[];
 
-    // Fetch series + events + drivers in parallel (all use seriesId)
+    // Fetch series + events + drivers + registrations in parallel
     try {
-        const [seriesResp, eventsResp, driversResp] = await Promise.all([
+        const [seriesResp, eventsResp, driversResp, regsResp] = await Promise.all([
             api.get<Series>(`/api/series/${seriesId}`),
             api.get<SeriesEvent[]>(`/api/series/${seriesId}/events`),
             api.get<SeriesDriver[]>(`/api/series/${seriesId}/drivers`),
+            api.get<Registration[]>(`/api/series/${seriesId}/registrations`).catch((): { data: Registration[] } => ({ data: [] })),
         ]);
         series = seriesResp.data;
         events = eventsResp.data;
         drivers = driversResp.data;
+        registrations = regsResp.data;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 404) {
             container.innerHTML = '<div class="alert alert-warning">Series not found.</div>';
@@ -155,23 +181,72 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
         events.map(ev => `
             <div class="d-flex align-items-center gap-2 py-2 border-bottom">
                 <span class="badge rounded-pill font-monospace" style="background:var(--bs-tertiary-bg);color:var(--bs-secondary-color);min-width:2.5rem">R${ev.round_number}</span>
-                <a href="${eventDetailUrl(ev.event_id, ev.event_name ?? 'event', { championship_name: champ.name, series_name: series.name })}" class="flex-grow-1 text-decoration-none">${esc(ev.event_name ?? 'Unnamed event')}</a>
+                <a href="${eventDetailUrl(ev.event_id, ev.event_name ?? 'event', { championship_name: champ.name, series_name: series.name })}" class="flex-grow-1">${esc(ev.event_name ?? 'Unnamed event')}</a>
                 ${ev.start_time ? `<span class="text-body-secondary small">${shortDate.format(new Date(ev.start_time))}</span>` : ''}
             </div>`).join('') :
         '<p class="text-body-secondary">No events linked yet.</p>';
 
-    const driversHtml = drivers.length > 0 ?
-        drivers.map(d => `
-            <div class="d-flex align-items-center gap-2 py-2 border-bottom">
+    const statusBadge = (status: string) => {
+        const colors: Record<string, string> = {
+            confirmed: 'text-bg-success',
+            pending: 'text-bg-warning',
+            invited: 'text-bg-info',
+            waitlisted: 'text-bg-secondary',
+            cancelled: 'text-bg-danger',
+        };
+        return `<span class="badge ${colors[status] ?? 'text-bg-secondary'}">${status}</span>`;
+    };
+
+    // Registration info
+    const regMode = series.registration_mode ?? 'closed';
+    const canSelfRegister = isLoggedIn() && (regMode === 'open' || regMode === 'approval_required' || regMode === 'invite_only');
+
+    const spotsInfo = series.max_spots ?
+        `<span class="text-body-secondary small">${registrations.filter(r => r.status === 'confirmed').length}/${series.max_spots} spots filled</span>` :
+        '';
+
+    const regModeBadgeColor = regMode === 'open' ? 'success' : 'secondary';
+    const regInfoHtml = regMode !== 'closed' ? `
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="badge text-bg-${regMode === 'approval_required' ? 'warning' : regModeBadgeColor}">${regMode.replace('_', ' ')}</span>
+            ${spotsInfo}
+            ${series.registration_deadline ? `<span class="text-body-secondary small">Deadline: ${shortDate.format(new Date(series.registration_deadline))}</span>` : ''}
+            ${series.price_cents ? `<span class="text-body-secondary small">$${(series.price_cents / 100).toFixed(2)}${series.currency ? ' ' + series.currency : ''}</span>` : ''}
+        </div>
+    ` : '';
+
+    // Registrations list
+    const regsHtml = registrations.length > 0 ?
+        registrations.map(r => {
+            const pts = r.standings?.total_points;
+            const ptsHtml = typeof pts === 'number' ?
+                `<span class="fw-semibold">${String(pts)} pts</span>` :
+                '';
+            return `<div class="d-flex align-items-center gap-2 py-2 border-bottom" data-reg-uid="${r.uid}">
+                <span class="flex-grow-1">${esc(r.driver_name)}</span>
+                ${statusBadge(r.status)}
+                ${ptsHtml}
+                ${canManage ? `<button class="btn btn-sm btn-outline-danger reg-remove-btn" data-uid="${r.uid}" title="Remove"><i class="fa-solid fa-xmark"></i></button>` : ''}
+            </div>`;
+        }).join('') :
+        '';
+
+    // Legacy drivers list (only show if registrations are empty and drivers exist)
+    const driversHtml = registrations.length === 0 && drivers.length > 0 ?
+        drivers.map(d => `<div class="d-flex align-items-center gap-2 py-2 border-bottom">
                 <span class="flex-grow-1">${esc(d.driver_name)}</span>
                 ${d.seeded ? '<span class="badge text-bg-info">Seeded</span>' : ''}
                 <span class="fw-semibold">${d.total_points ?? 0} pts</span>
             </div>`).join('') :
-        '<p class="text-body-secondary">No drivers enrolled yet.</p>';
+        '';
+
+    const noDriversMsg = registrations.length === 0 && drivers.length === 0 ?
+        '<p class="text-body-secondary">No drivers enrolled yet.</p>' :
+        '';
 
     container.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3 text-body-secondary small">
-            <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary" data-track-hover="${track.track_id}">
+            <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary" data-track-hover="${track.track_id}">
                 ${track.logo_key ?
                     `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
                     '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
@@ -179,9 +254,15 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
                 <span>${esc(track.name)}</span>
             </a>
             <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
-            <a href="${championshipDetailUrl(champ.championship_id, champ.name)}" class="text-decoration-none text-body-secondary">
-                <i class="fa-solid fa-trophy me-1 small"></i>${esc(champ.name)}
+            <a href="${championshipDetailUrl(champ.championship_id, champ.name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary">
+                ${champ.logo_key ?
+                    `<img src="${assetsBase}/${champ.logo_key}" alt="" width="24" height="24" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                    '<i class="fa-solid fa-trophy small"></i>'
+                }
+                <span>${esc(champ.name)}</span>
             </a>
+            <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
+            <span class="active">${esc(series.name)}</span>
         </div>
         <div class="d-flex align-items-center gap-2 mb-2">
             <h1 class="mb-0">${esc(series.name)}</h1>
@@ -201,8 +282,13 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
                 <div>${eventsHtml}</div>
             </div>
             <div class="col-md-5">
-                <h3 class="mb-3">Drivers</h3>
-                <div>${driversHtml}</div>
+                <div class="d-flex align-items-center mb-3">
+                    <h3 class="mb-0">Drivers</h3>
+                    ${canSelfRegister ? `<button class="btn btn-sm btn-success ms-auto" id="self-register-btn"><i class="fa-solid fa-user-plus me-1"></i>${regMode === 'invite_only' ? 'Accept Invite' : 'Register'}</button>` : ''}
+                    ${canManage ? `<button class="btn btn-sm btn-primary ms-2" id="admin-register-btn"><i class="fa-solid fa-plus me-1"></i>${regMode === 'invite_only' ? 'Invite Driver' : 'Add Driver'}</button>` : ''}
+                </div>
+                ${regInfoHtml}
+                <div>${regsHtml}${driversHtml}${noDriversMsg}</div>
             </div>
         </div>
     `;
@@ -218,12 +304,173 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
         } catch { /* api interceptor shows toast */ }
     });
 
+    // Self-register button
+    document.getElementById('self-register-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('self-register-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Registering\u2026';
+        const label = regMode === 'invite_only' ? 'Accept Invite' : 'Register';
+        try {
+            await api.post(`/api/series/${series.series_id}/registrations`, {});
+            await renderSeriesDetail(container);
+        } catch {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="fa-solid fa-user-plus me-1"></i>${label}`;
+        }
+    });
+
+    // Admin register / invite button
+    document.getElementById('admin-register-btn')?.addEventListener('click', () => {
+        showInviteDriverModal(series, regMode, async () => {
+            await renderSeriesDetail(container);
+        });
+    });
+
+    // Registration remove buttons
+    container.querySelectorAll<HTMLElement>('.reg-remove-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const regUid = btn.dataset.uid;
+            if (!regUid || !confirm('Remove this registration?')) {
+                return;
+            }
+            try {
+                await api.delete(`/api/series/${series.series_id}/registrations/${regUid}`);
+                await renderSeriesDetail(container);
+            } catch { /* api interceptor shows toast */ }
+        });
+    });
+
     // New Event button
     document.getElementById('new-event-btn')?.addEventListener('click', () => {
         const nextRound = events.length > 0 ? Math.max(...events.map(e => e.round_number)) + 1 : 1;
         showNewEventModal(series, track, formats, nextRound, async () => {
             await renderSeriesDetail(container);
         });
+    });
+}
+
+function showInviteDriverModal(
+    series: Series,
+    regMode: string,
+    onSave: () => Promise<void>,
+): void {
+    const isInvite = regMode === 'invite_only';
+    const title = isInvite ? 'Invite Driver' : 'Add Driver';
+
+    document.getElementById('invite-driver-modal')?.remove();
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="modal fade" id="invite-driver-modal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form id="invite-form">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="invite-email">Email</label>
+                            <input type="email" class="form-control" id="invite-email" required>
+                            <div class="form-text" id="invite-name-preview"></div>
+                        </div>
+                        <div class="alert alert-danger mt-3 mb-0 d-none" id="invite-error"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="invite-submit">${title}</button>
+                    </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `);
+
+    const modalEl = document.getElementById('invite-driver-modal');
+    if (!modalEl) {
+        return;
+    }
+    const bsModal = new Modal(modalEl);
+    bsModal.show();
+    modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+
+    modalEl.addEventListener('shown.bs.modal', () => {
+        const el = document.getElementById('invite-email');
+        if (el instanceof HTMLInputElement) {
+            el.focus();
+        }
+    }, { once: true });
+
+    // Debounced email lookup
+    let lookupTimer: ReturnType<typeof setTimeout>;
+    const emailInput = document.getElementById('invite-email');
+    const preview = document.getElementById('invite-name-preview');
+    if (emailInput instanceof HTMLInputElement && preview) {
+        emailInput.addEventListener('input', () => {
+            clearTimeout(lookupTimer);
+            preview.textContent = '';
+            const val = emailInput.value.trim();
+            if (!val?.includes('@')) {
+                return;
+            }
+            lookupTimer = setTimeout(async () => {
+                try {
+                    const resp = await api.get<{ uid: string; name: string } | null>(
+                        `/api/users/lookup?email=${encodeURIComponent(val)}`,
+                    );
+                    if (resp.data?.name) {
+                        preview.textContent = `Found: ${resp.data.name}`;
+                        preview.className = 'form-text text-success';
+                    } else {
+                        preview.textContent = 'No account yet \u2014 they\u2019ll get an invite email';
+                        preview.className = 'form-text text-body-secondary';
+                    }
+                } catch {
+                    preview.textContent = '';
+                }
+            }, 400);
+        });
+    }
+
+    // Submit
+    const form = document.getElementById('invite-form');
+    if (!form) {
+        return;
+    }
+    form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const email = emailInput instanceof HTMLInputElement ? emailInput.value.trim() : '';
+        if (!email) {
+            return;
+        }
+
+        const btn = document.getElementById('invite-submit');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending\u2026';
+
+        const errEl = document.getElementById('invite-error');
+
+        try {
+            await api.post(`/api/series/${series.series_id}/registrations`, { email });
+            bsModal.hide();
+            await onSave();
+        } catch (err: unknown) {
+            btn.disabled = false;
+            btn.textContent = title;
+            let msg = 'Something went wrong';
+            if (axios.isAxiosError<{ error?: string }>(err) && typeof err.response?.data?.error === 'string') {
+                msg = err.response.data.error;
+            }
+            if (errEl) {
+                errEl.textContent = msg;
+                errEl.classList.remove('d-none');
+            }
+        }
     });
 }
 

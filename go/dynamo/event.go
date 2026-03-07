@@ -24,9 +24,13 @@ type Event struct {
 	EventType    string `dynamodbav:"eventType,omitempty" json:"event_type,omitempty"`
 	StartTime    string `dynamodbav:"startTime" json:"start_time"`
 	EndTime      string `dynamodbav:"endTime,omitempty" json:"end_time,omitempty"`
-	GSI1PK       string `dynamodbav:"gsi1pk,omitempty" json:"-"`
-	GSI1SK       string `dynamodbav:"gsi1sk,omitempty" json:"-"`
-	CreatedAt    string `dynamodbav:"createdAt" json:"created_at"`
+
+	RegistrationSettings `dynamodbav:",omitempty"`
+	ScoringConfig        `dynamodbav:",omitempty"`
+
+	GSI1PK    string `dynamodbav:"gsi1pk,omitempty" json:"-"`
+	GSI1SK    string `dynamodbav:"gsi1sk,omitempty" json:"-"`
+	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 func CreateEvent(ctx context.Context, e Event) (*Event, error) {

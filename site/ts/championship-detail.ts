@@ -109,13 +109,18 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
 
     container.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3 text-body-secondary small">
-            <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary" data-track-hover="${track.track_id}">
+            <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary" data-track-hover="${track.track_id}">
                 ${track.logo_key ?
                     `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
                     '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
                 }
                 <span>${esc(track.name)}</span>
             </a>
+            <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
+            <span class="active d-inline-flex align-items-center gap-2">${champ.logo_key ?
+                `<img src="${assetsBase}/${champ.logo_key}" alt="" width="24" height="24" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                '<i class="fa-solid fa-trophy small"></i>'
+            }<span>${esc(champ.name)}</span></span>
         </div>
         <div class="d-flex align-items-start gap-3 mb-4">
             ${champ.logo_key ?

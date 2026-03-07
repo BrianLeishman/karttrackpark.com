@@ -2,7 +2,7 @@ function handler(event) {
     var request = event.request;
     var uri = request.uri;
     // Rewrite /{prefix}/{xid}/... to the static page, but not /{prefix}/ itself
-    var prefixes = ['tracks', 'events', 'championships', 'series'];
+    var prefixes = ['tracks', 'events', 'championships', 'series', 'sessions'];
     var matched = false;
     for (var i = 0; i < prefixes.length; i++) {
         var p = prefixes[i];

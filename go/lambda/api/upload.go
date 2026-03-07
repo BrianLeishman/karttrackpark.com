@@ -43,8 +43,9 @@ func handleUploadURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		TrackID  string `json:"track_id"`
-		Filename string `json:"filename"`
+		TrackID   string `json:"track_id"`
+		SessionID string `json:"session_id"`
+		Filename  string `json:"filename"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -63,7 +64,12 @@ func handleUploadURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uploadID := xid.New().String()
-	key := "raw/" + req.TrackID + "/" + uid + "/" + uploadID + "/" + req.Filename
+	var key string
+	if req.SessionID != "" {
+		key = "raw/" + req.TrackID + "/" + req.SessionID + "/" + uploadID + "/" + req.Filename
+	} else {
+		key = "raw/" + req.TrackID + "/" + uid + "/" + uploadID + "/" + req.Filename
+	}
 
 	presigned, err := presigner.PresignPutObject(r.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(uploadBucket),

@@ -22,9 +22,13 @@ type Series struct {
 	Description    string `dynamodbav:"description,omitempty" json:"description,omitempty"`
 	Status         string `dynamodbav:"status,omitempty" json:"status,omitempty"`
 	Rules          string `dynamodbav:"rules,omitempty" json:"rules,omitempty"`
-	GSI1PK         string `dynamodbav:"gsi1pk,omitempty" json:"-"`
-	GSI1SK         string `dynamodbav:"gsi1sk,omitempty" json:"-"`
-	CreatedAt      string `dynamodbav:"createdAt" json:"created_at"`
+
+	RegistrationSettings `dynamodbav:",omitempty"`
+	ScoringConfig        `dynamodbav:",omitempty"`
+
+	GSI1PK    string `dynamodbav:"gsi1pk,omitempty" json:"-"`
+	GSI1SK    string `dynamodbav:"gsi1sk,omitempty" json:"-"`
+	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 type SeriesEvent struct {

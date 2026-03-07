@@ -35,6 +35,12 @@ func SeriesDriverSK(uid string) string       { return "DRIVER#" + uid }
 func EventSessionSK(sessionID string) string { return "SESSION#" + sessionID }
 func ResultSK(uid string) string             { return "RESULT#" + uid }
 
+// Registration sort keys
+func RegSK(uid string) string { return "REG#" + uid }
+
+// GSI2 keys for user registrations
+func UserRegGSI2PK(uid string) string { return "USERREG#" + uid }
+
 // GSI1 keys for email lookup
 func EmailGSI1PK(email string) string { return "EMAIL#" + strings.ToLower(email) }
 

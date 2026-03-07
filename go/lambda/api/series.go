@@ -129,7 +129,11 @@ func handleUpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := map[string]bool{"name": true, "description": true, "status": true, "rules": true, "championship_id": true}
+	allowed := map[string]bool{
+		"name": true, "description": true, "status": true, "rules": true, "championship_id": true,
+		"registrationMode": true, "maxSpots": true, "priceCents": true, "currency": true, "registrationDeadline": true,
+		"method": true, "pointsScheme": true, "dropRounds": true, "tiebreaker": true,
+	}
 	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {

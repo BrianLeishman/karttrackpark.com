@@ -2,13 +2,14 @@ import axios from 'axios';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
 import { esc, dateFmt, typeBadge } from './html';
-import { getEntityId, ensureCorrectEventUrl, trackDetailUrl, championshipDetailUrl, seriesDetailUrl } from './url-utils';
+import { getEntityId, ensureCorrectEventUrl, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, sessionDetailUrl } from './url-utils';
 
 interface SeriesContext {
     series_id: string;
     series_name: string;
     championship_id: string;
     championship_name: string;
+    championship_logo_key?: string;
     round_number: number;
 }
 
@@ -103,7 +104,7 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
 
     // Build breadcrumb from series context
     const breadcrumbParts: string[] = [
-        `<a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary" data-track-hover="${track.track_id}">
+        `<a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary" data-track-hover="${track.track_id}">
             ${track.logo_key ?
                 `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
                 '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
@@ -113,26 +114,32 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
     ];
     if (seriesCtx) {
         breadcrumbParts.push(
-            `<a href="${championshipDetailUrl(seriesCtx.championship_id, seriesCtx.championship_name)}" class="text-decoration-none text-body-secondary"><i class="fa-solid fa-trophy me-1 small"></i>${esc(seriesCtx.championship_name)}</a>`,
+            `<a href="${championshipDetailUrl(seriesCtx.championship_id, seriesCtx.championship_name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary">${seriesCtx.championship_logo_key ?
+                `<img src="${assetsBase}/${seriesCtx.championship_logo_key}" alt="" width="24" height="24" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                '<i class="fa-solid fa-trophy small"></i>'
+            }<span>${esc(seriesCtx.championship_name)}</span></a>`,
         );
         breadcrumbParts.push(
-            `<a href="${seriesDetailUrl(seriesCtx.series_id, seriesCtx.series_name)}" class="text-decoration-none text-body-secondary">${esc(seriesCtx.series_name)}</a>`,
+            `<a href="${seriesDetailUrl(seriesCtx.series_id, seriesCtx.series_name)}" class="text-body-secondary">${esc(seriesCtx.series_name)}</a>`,
         );
     }
 
     sessions.sort((a, b) => (a.session_order ?? 0) - (b.session_order ?? 0));
     const sessionsHtml = sessions.length > 0 ?
         sessions.map(s => `
-            <div class="d-flex align-items-center gap-2 py-2 border-bottom">
+            <a href="${sessionDetailUrl(s.session_id, s.session_name ?? 'session')}" class="d-flex align-items-center gap-2 py-2 border-bottom text-decoration-none text-body">
                 <span class="badge rounded-pill font-monospace" style="background:var(--bs-tertiary-bg);color:var(--bs-secondary-color);min-width:2rem">${s.session_order ?? ''}</span>
                 <span class="flex-grow-1">${esc(s.session_name ?? 'Unnamed')}</span>
                 ${s.session_type ? `<span class="badge text-bg-secondary">${s.session_type.replace('_', ' ')}</span>` : ''}
-            </div>`).join('') :
+                <i class="fa-solid fa-chevron-right text-body-tertiary"></i>
+            </a>`).join('') :
         '<p class="text-body-secondary">No sessions.</p>';
 
     container.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3 text-body-secondary small">
             ${breadcrumbParts.join('<i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>')}
+            <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
+            <span class="active">${esc(event.name)}</span>
         </div>
         <div class="d-flex align-items-center gap-2 mb-2">
             <h1 class="mb-0">${esc(event.name)}</h1>

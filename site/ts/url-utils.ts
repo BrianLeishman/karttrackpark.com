@@ -16,6 +16,7 @@ function detailUrl(prefix: string, id: string, name: string): string {
 export const trackDetailUrl = (id: string, name: string): string => detailUrl('tracks', id, name);
 export const championshipDetailUrl = (id: string, name: string): string => detailUrl('championships', id, name);
 export const seriesDetailUrl = (id: string, name: string): string => detailUrl('series', id, name);
+export const sessionDetailUrl = (id: string, name: string): string => detailUrl('sessions', id, name);
 
 export interface EventSeriesContext {
     championship_name: string;

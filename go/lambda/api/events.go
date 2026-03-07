@@ -239,6 +239,8 @@ func handleUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	allowed := map[string]bool{
 		"name": true, "description": true, "eventType": true,
 		"startTime": true, "endTime": true,
+		"registrationMode": true, "maxSpots": true, "priceCents": true, "currency": true, "registrationDeadline": true,
+		"method": true, "pointsScheme": true, "dropRounds": true, "tiebreaker": true,
 	}
 	fields := map[string]any{}
 	for k, v := range req {

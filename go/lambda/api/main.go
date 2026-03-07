@@ -50,6 +50,9 @@ func main() {
 	// Auth
 	mux.HandleFunc("POST /api/auth/session", handleAuthSession)
 
+	// User lookup
+	mux.HandleFunc("GET /api/users/lookup", handleUserLookup)
+
 	// Tokens
 	mux.HandleFunc("GET /api/token", handleListTokens)
 	mux.HandleFunc("POST /api/token", handleCreateToken)
@@ -98,6 +101,30 @@ func main() {
 	mux.HandleFunc("PUT /api/series/{id}/drivers/{uid}", handleUpdateSeriesDriver)
 	mux.HandleFunc("DELETE /api/series/{id}/drivers/{uid}", handleDeleteSeriesDriver)
 
+	// Registrations (series)
+	mux.HandleFunc("POST /api/series/{id}/registrations", handleCreateSeriesReg)
+	mux.HandleFunc("GET /api/series/{id}/registrations", handleListSeriesRegs)
+	mux.HandleFunc("GET /api/series/{id}/registrations/{uid}", handleGetSeriesReg)
+	mux.HandleFunc("PUT /api/series/{id}/registrations/{uid}", handleUpdateSeriesReg)
+	mux.HandleFunc("DELETE /api/series/{id}/registrations/{uid}", handleDeleteSeriesReg)
+
+	// Registrations (events)
+	mux.HandleFunc("POST /api/events/{id}/registrations", handleCreateEventReg)
+	mux.HandleFunc("GET /api/events/{id}/registrations", handleListEventRegs)
+	mux.HandleFunc("GET /api/events/{id}/registrations/{uid}", handleGetEventReg)
+	mux.HandleFunc("PUT /api/events/{id}/registrations/{uid}", handleUpdateEventReg)
+	mux.HandleFunc("DELETE /api/events/{id}/registrations/{uid}", handleDeleteEventReg)
+
+	// Registrations (sessions)
+	mux.HandleFunc("POST /api/sessions/{id}/registrations", handleCreateSessionReg)
+	mux.HandleFunc("GET /api/sessions/{id}/registrations", handleListSessionRegs)
+	mux.HandleFunc("GET /api/sessions/{id}/registrations/{uid}", handleGetSessionReg)
+	mux.HandleFunc("PUT /api/sessions/{id}/registrations/{uid}", handleUpdateSessionReg)
+	mux.HandleFunc("DELETE /api/sessions/{id}/registrations/{uid}", handleDeleteSessionReg)
+
+	// My registrations
+	mux.HandleFunc("GET /api/my/registrations", handleListMyRegistrations)
+
 	// Event Sessions
 	mux.HandleFunc("POST /api/events/{id}/sessions", handleCreateEventSession)
 	mux.HandleFunc("GET /api/events/{id}/sessions", handleListEventSessions)
@@ -105,6 +132,9 @@ func main() {
 	// Sessions
 	mux.HandleFunc("GET /api/sessions", handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", handleGetSession)
+	mux.HandleFunc("GET /api/sessions/{id}/public", handleGetSessionPublic)
+	mux.HandleFunc("POST /api/sessions/{id}/ingest", handleStartIngest)
+	mux.HandleFunc("GET /api/sessions/{id}/laps", handleListLaps)
 	mux.HandleFunc("GET /api/sessions/{id}/laps/{lapNo}", handleGetLap)
 
 	// Results

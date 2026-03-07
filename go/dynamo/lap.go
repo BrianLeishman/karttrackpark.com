@@ -11,21 +11,22 @@ import (
 )
 
 type Lap struct {
-	PK        string  `dynamodbav:"pk" json:"-"`
-	SK        string  `dynamodbav:"sk" json:"-"`
-	SessionID string  `dynamodbav:"sessionId" json:"session_id"`
-	LapNo     int     `dynamodbav:"lapNo" json:"lap_no"`
-	LapTimeMs int64   `dynamodbav:"lapTimeMs" json:"lap_time_ms"`
-	MaxSpeed  float64 `dynamodbav:"maxSpeed,omitempty" json:"max_speed,omitempty"`
-	UID       string  `dynamodbav:"uid" json:"uid"`
-	LayoutID  string  `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
-	KartClass string  `dynamodbav:"kartClass,omitempty" json:"kart_class,omitempty"`
-	KartID    string  `dynamodbav:"kartId,omitempty" json:"kart_id,omitempty"`
-	Verified  bool    `dynamodbav:"verified" json:"verified"`
-	S3Key     string  `dynamodbav:"s3Key,omitempty" json:"s3_key,omitempty"`
-	GSI1PK    string  `dynamodbav:"gsi1pk,omitempty" json:"-"`
-	GSI1SK    string  `dynamodbav:"gsi1sk,omitempty" json:"-"`
-	CreatedAt string  `dynamodbav:"createdAt" json:"created_at"`
+	PK           string  `dynamodbav:"pk" json:"-"`
+	SK           string  `dynamodbav:"sk" json:"-"`
+	SessionID    string  `dynamodbav:"sessionId" json:"session_id"`
+	LapNo        int     `dynamodbav:"lapNo" json:"lap_no"`
+	LapTimeMs    int64   `dynamodbav:"lapTimeMs" json:"lap_time_ms"`
+	MaxSpeed     float64 `dynamodbav:"maxSpeed,omitempty" json:"max_speed,omitempty"`
+	UID          string  `dynamodbav:"uid" json:"uid"`
+	LayoutID     string  `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
+	KartClass    string  `dynamodbav:"kartClass,omitempty" json:"kart_class,omitempty"`
+	KartID       string  `dynamodbav:"kartId,omitempty" json:"kart_id,omitempty"`
+	Verified     bool    `dynamodbav:"verified" json:"verified"`
+	S3Key        string  `dynamodbav:"s3Key,omitempty" json:"s3_key,omitempty"`
+	TelemetryKey string  `dynamodbav:"telemetryKey,omitempty" json:"telemetry_key,omitempty"`
+	GSI1PK       string  `dynamodbav:"gsi1pk,omitempty" json:"-"`
+	GSI1SK       string  `dynamodbav:"gsi1sk,omitempty" json:"-"`
+	CreatedAt    string  `dynamodbav:"createdAt" json:"created_at"`
 }
 
 func PutLap(ctx context.Context, l Lap) error {

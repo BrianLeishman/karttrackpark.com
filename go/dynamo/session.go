@@ -28,9 +28,16 @@ type Session struct {
 	Notes        string   `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
 	LapCount     int      `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
 	BestLapMs    int64    `dynamodbav:"bestLapMs,omitempty" json:"best_lap_ms,omitempty"`
-	GSI1PK       string   `dynamodbav:"gsi1pk,omitempty" json:"-"`
-	GSI1SK       string   `dynamodbav:"gsi1sk,omitempty" json:"-"`
-	CreatedAt    string   `dynamodbav:"createdAt" json:"created_at"`
+
+	IngestStatus string `dynamodbav:"ingestStatus,omitempty" json:"ingest_status,omitempty"`
+	IngestError  string `dynamodbav:"ingestError,omitempty" json:"ingest_error,omitempty"`
+	RawS3Key     string `dynamodbav:"rawS3Key,omitempty" json:"raw_s3_key,omitempty"`
+
+	RegistrationSettings `dynamodbav:",omitempty"`
+
+	GSI1PK    string `dynamodbav:"gsi1pk,omitempty" json:"-"`
+	GSI1SK    string `dynamodbav:"gsi1sk,omitempty" json:"-"`
+	CreatedAt string `dynamodbav:"createdAt" json:"created_at"`
 }
 
 func CreateSession(ctx context.Context, s Session) (*Session, error) {

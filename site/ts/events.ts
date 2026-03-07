@@ -47,7 +47,7 @@ function eventRow(event: Event): string {
     return `
         <div class="list-group-item d-flex align-items-center gap-3 flex-wrap">
             <div class="flex-grow-1">
-                <a href="${eventDetailUrl(event.event_id, event.name, event.series?.[0])}" class="fw-semibold text-decoration-none">${esc(event.name)}</a>
+                <a href="${eventDetailUrl(event.event_id, event.name, event.series?.[0])}" class="fw-semibold">${esc(event.name)}</a>
                 <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
                     ${typeBadge(event.event_type)}
                     ${seriesBadges(event)}
