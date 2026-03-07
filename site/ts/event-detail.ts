@@ -2,7 +2,7 @@ import axios from 'axios';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
 import { esc, dateFmt, typeBadge } from './html';
-import { getEntityId, ensureCorrectSlug, trackDetailUrl, championshipDetailUrl, seriesDetailUrl } from './url-utils';
+import { getEntityId, ensureCorrectEventUrl, trackDetailUrl, championshipDetailUrl, seriesDetailUrl } from './url-utils';
 
 interface SeriesContext {
     series_id: string;
@@ -70,7 +70,8 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
         return;
     }
 
-    if (ensureCorrectSlug('events', event.event_id, event.name)) {
+    const seriesCtx = event.series?.[0];
+    if (ensureCorrectEventUrl(event.event_id, event.name, seriesCtx ? { championship_name: seriesCtx.championship_name, series_name: seriesCtx.series_name } : undefined)) {
         return;
     }
 
@@ -101,7 +102,6 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
     document.title = `${event.name} \u2014 Kart Track Park`;
 
     // Build breadcrumb from series context
-    const seriesCtx = event.series?.[0];
     const breadcrumbParts: string[] = [
         `<a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary" data-track-hover="${track.track_id}">
             ${track.logo_key ?

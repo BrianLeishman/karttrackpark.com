@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Modal } from 'bootstrap';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { esc, statusColor, typeLabel } from './html';
+import { esc, typeLabel } from './html';
 import { getEntityId, ensureCorrectSlug, trackDetailUrl, championshipDetailUrl, eventDetailUrl } from './url-utils';
 
 interface Series {
@@ -11,7 +11,6 @@ interface Series {
     championship_id: string;
     name: string;
     description?: string;
-    status?: string;
     rules?: string;
     created_at: string;
 }
@@ -156,7 +155,7 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
         events.map(ev => `
             <div class="d-flex align-items-center gap-2 py-2 border-bottom">
                 <span class="badge rounded-pill font-monospace" style="background:var(--bs-tertiary-bg);color:var(--bs-secondary-color);min-width:2.5rem">R${ev.round_number}</span>
-                <a href="${eventDetailUrl(ev.event_id, ev.event_name ?? 'event')}" class="flex-grow-1 text-decoration-none">${esc(ev.event_name ?? 'Unnamed event')}</a>
+                <a href="${eventDetailUrl(ev.event_id, ev.event_name ?? 'event', { championship_name: champ.name, series_name: series.name })}" class="flex-grow-1 text-decoration-none">${esc(ev.event_name ?? 'Unnamed event')}</a>
                 ${ev.start_time ? `<span class="text-body-secondary small">${shortDate.format(new Date(ev.start_time))}</span>` : ''}
             </div>`).join('') :
         '<p class="text-body-secondary">No events linked yet.</p>';
@@ -171,25 +170,21 @@ export async function renderSeriesDetail(container: HTMLElement): Promise<void> 
         '<p class="text-body-secondary">No drivers enrolled yet.</p>';
 
     container.innerHTML = `
-        <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary mb-2" data-track-hover="${track.track_id}">
-            ${track.logo_key ?
-                `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
-                '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
-            }
-            <span>${esc(track.name)}</span>
-        </a>
-        <div class="mb-2">
-            <a href="${championshipDetailUrl(champ.championship_id, champ.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary">
-                ${champ.logo_key ?
-                    `<img src="${assetsBase}/${champ.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
-                    '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-trophy small"></i></div>'
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3 text-body-secondary small">
+            <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary" data-track-hover="${track.track_id}">
+                ${track.logo_key ?
+                    `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                    '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
                 }
-                <span>${esc(champ.name)}</span>
+                <span>${esc(track.name)}</span>
+            </a>
+            <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
+            <a href="${championshipDetailUrl(champ.championship_id, champ.name)}" class="text-decoration-none text-body-secondary">
+                <i class="fa-solid fa-trophy me-1 small"></i>${esc(champ.name)}
             </a>
         </div>
         <div class="d-flex align-items-center gap-2 mb-2">
             <h1 class="mb-0">${esc(series.name)}</h1>
-            ${series.status ? `<span class="badge text-bg-${statusColor(series.status)}">${series.status}</span>` : ''}
             ${canManage ? `
                 <a href="/my/series/edit/?id=${series.series_id}" class="btn btn-sm btn-outline-secondary ms-auto"><i class="fa-solid fa-pen me-1"></i>Edit</a>
                 <button class="btn btn-sm btn-outline-danger" id="delete-series-btn"><i class="fa-solid fa-trash me-1"></i>Delete</button>

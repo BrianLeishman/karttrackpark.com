@@ -134,7 +134,7 @@ function eventRow(event: TrackEvent): string {
     return `
         <div class="d-flex align-items-center gap-2 py-2 border-bottom">
             <div class="flex-grow-1">
-                <a href="${eventDetailUrl(event.event_id, event.name)}" class="fw-semibold text-decoration-none">${esc(event.name)}</a>
+                <a href="${eventDetailUrl(event.event_id, event.name, event.series?.[0])}" class="fw-semibold text-decoration-none">${esc(event.name)}</a>
                 <div class="d-flex flex-wrap gap-1 mt-1">
                     ${typeBadge(event.event_type)}
                     ${seriesBadges(event)}

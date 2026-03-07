@@ -72,13 +72,6 @@ async function init(): Promise<void> {
         const pic = user.picture ?
             `<img src="${user.picture}" alt="" class="rounded-circle me-1" width="22" height="22" referrerpolicy="no-referrer"> ` :
             '';
-        const navLinks = document.getElementById('nav-links');
-        if (navLinks) {
-            navLinks.innerHTML = `
-                <li class="nav-item"><a class="nav-link${path === '/' ? ' active' : ''}" href="/">Events</a></li>
-            `;
-        }
-
         authContainer.innerHTML = `
             <div class="dropdown">
                 <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">

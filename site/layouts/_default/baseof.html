@@ -83,7 +83,12 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbar-collapse">
-                <ul class="navbar-nav me-auto" id="nav-links"></ul>
+                <ul class="navbar-nav me-auto" id="nav-links">
+                    <li class="nav-item"><a class="nav-link{{ if .IsHome }} active{{ end }}" href="/">Events</a></li>
+                    <li class="nav-item"><a class="nav-link{{ if eq .RelPermalink "/tracks/" }} active{{ end }}" href="/tracks/">Tracks</a></li>
+                    <li class="nav-item"><a class="nav-link{{ if eq .RelPermalink "/championships/" }} active{{ end }}" href="/championships/">Championships</a></li>
+                    <li class="nav-item"><a class="nav-link{{ if eq .RelPermalink "/series/" }} active{{ end }}" href="/series/">Series</a></li>
+                </ul>
                 <div class="d-flex align-items-center gap-3">
                     <div class="dropdown">
                         <button class="btn btn-link text-body-secondary p-0 border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Toggle theme">

@@ -129,12 +129,25 @@ func handleUpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := map[string]bool{"name": true, "description": true, "status": true, "rules": true}
+	allowed := map[string]bool{"name": true, "description": true, "status": true, "rules": true, "championship_id": true}
 	fields := map[string]any{}
 	for k, v := range req {
 		if allowed[k] {
 			fields[k] = v
 		}
+	}
+
+	// When championship changes, update the GSI1 key so queries still work.
+	if newChampID, ok := fields["championship_id"]; ok {
+		champStr, _ := newChampID.(string)
+		if champStr != "" {
+			fields["championshipId"] = champStr
+			fields["gsi1pk"] = "CHAMPIONSHIP#" + champStr
+		} else {
+			fields["championshipId"] = ""
+			fields["gsi1pk"] = ""
+		}
+		delete(fields, "championship_id")
 	}
 
 	if err := dynamo.UpdateSeries(r.Context(), seriesID, fields); err != nil {

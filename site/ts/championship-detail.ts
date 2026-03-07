@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Modal } from 'bootstrap';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { esc, statusColor } from './html';
+import { esc } from './html';
 import { getEntityId, ensureCorrectSlug, trackDetailUrl, seriesDetailUrl as seriesUrl } from './url-utils';
 export { championshipDetailUrl } from './url-utils';
 
@@ -26,7 +26,6 @@ interface RacingSeries {
     championship_id: string;
     name: string;
     description?: string;
-    status?: string;
     created_at: string;
 }
 
@@ -100,10 +99,7 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
                 <a href="${seriesUrl(s.series_id, s.name)}" class="text-decoration-none">
                     <div class="card h-100">
                         <div class="card-body">
-                            <div class="d-flex align-items-center gap-2 mb-2">
-                                <h5 class="card-title mb-0">${esc(s.name)}</h5>
-                                ${s.status ? `<span class="badge text-bg-${statusColor(s.status)}">${s.status}</span>` : ''}
-                            </div>
+                            <h5 class="card-title mb-2">${esc(s.name)}</h5>
                             ${s.description ? `<p class="card-text text-body-secondary small mb-0">${esc(s.description)}</p>` : ''}
                         </div>
                     </div>
@@ -112,13 +108,15 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
         '<div class="col-12"><p class="text-body-secondary text-center py-3">No series yet.</p></div>';
 
     container.innerHTML = `
-        <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary mb-3" data-track-hover="${track.track_id}">
-            ${track.logo_key ?
-                `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
-                '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
-            }
-            <span>${esc(track.name)}</span>
-        </a>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3 text-body-secondary small">
+            <a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-decoration-none text-body-secondary" data-track-hover="${track.track_id}">
+                ${track.logo_key ?
+                    `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
+                    '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
+                }
+                <span>${esc(track.name)}</span>
+            </a>
+        </div>
         <div class="d-flex align-items-start gap-3 mb-4">
             ${champ.logo_key ?
                 `<img src="${assetsBase}/${champ.logo_key}" alt="" width="96" height="96" class="rounded flex-shrink-0" style="object-fit:cover">` :
@@ -162,8 +160,6 @@ export async function renderChampionshipDetail(container: HTMLElement): Promise<
 }
 
 function showNewSeriesModal(champId: string, onSave: () => Promise<void>): void {
-    const statusOptions = ['upcoming', 'active', 'completed', 'archived'];
-
     document.getElementById('modal-container')?.remove();
     document.body.insertAdjacentHTML('beforeend', `
         <div class="modal fade" id="modal-container" tabindex="-1">
@@ -181,14 +177,6 @@ function showNewSeriesModal(champId: string, onSave: () => Promise<void>): void 
                         <div class="mb-3">
                             <label class="form-label" for="series-desc">Description</label>
                             <textarea class="form-control" id="series-desc" rows="2"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label" for="series-status">Status</label>
-                            <select class="form-select" id="series-status">
-                                ${statusOptions.map(s =>
-                                    `<option value="${s}"${s === 'upcoming' ? ' selected' : ''}>${s[0].toUpperCase() + s.slice(1)}</option>`,
-                                ).join('')}
-                            </select>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="series-rules">Rules</label>
@@ -243,12 +231,10 @@ function showNewSeriesModal(champId: string, onSave: () => Promise<void>): void 
 
         try {
             const descEl = document.getElementById('series-desc');
-            const statusEl = document.getElementById('series-status');
             const rulesEl = document.getElementById('series-rules');
             await api.post(`/api/championships/${champId}/series`, {
                 name,
                 description: descEl instanceof HTMLTextAreaElement ? descEl.value.trim() : '',
-                status: statusEl instanceof HTMLSelectElement ? statusEl.value : 'upcoming',
                 rules: rulesEl instanceof HTMLTextAreaElement ? rulesEl.value.trim() : '',
             });
             bsModal.hide();
