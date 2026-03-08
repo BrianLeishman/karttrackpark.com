@@ -74,8 +74,8 @@ export function getDriverDetailIds(): { sessionId: string; uid: string } | null 
         }
         return null;
     }
-    // Production URL: /sessions/{sessionId}/driver/{uid}
-    const match = /^\/sessions\/([a-z0-9]+)\/driver\/([a-z0-9]+)/.exec(window.location.pathname);
+    // Production URL: /sessions/{sessionId}/{slug}/driver/{uid}/{slug}
+    const match = /^\/sessions\/([a-z0-9]+)\/[^/]+\/driver\/([a-z0-9]+)/.exec(window.location.pathname);
     if (match) {
         return { sessionId: match[1], uid: match[2] };
     }
