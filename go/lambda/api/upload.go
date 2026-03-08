@@ -35,59 +35,6 @@ var s3Presigner = sync.OnceValues(func() (*s3.PresignClient, error) {
 	return s3.NewPresignClient(c), nil
 })
 
-func handleUploadURL(w http.ResponseWriter, r *http.Request) {
-	uid, err := requireAuth(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	var req struct {
-		TrackID   string `json:"track_id"`
-		SessionID string `json:"session_id"`
-		Filename  string `json:"filename"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	if req.TrackID == "" || req.Filename == "" {
-		writeError(w, http.StatusBadRequest, "track_id and filename are required")
-		return
-	}
-
-	presigner, err := s3Presigner()
-	if err != nil {
-		log.Printf("s3 presigner error: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	uploadID := xid.New().String()
-	var key string
-	if req.SessionID != "" {
-		key = "raw/" + req.TrackID + "/" + req.SessionID + "/" + uploadID + "/" + req.Filename
-	} else {
-		key = "raw/" + req.TrackID + "/" + uid + "/" + uploadID + "/" + req.Filename
-	}
-
-	presigned, err := presigner.PresignPutObject(r.Context(), &s3.PutObjectInput{
-		Bucket: aws.String(uploadBucket),
-		Key:    aws.String(key),
-	}, s3.WithPresignExpires(15*time.Minute))
-	if err != nil {
-		log.Printf("presign error: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"upload_url": presigned.URL,
-		"key":        key,
-		"upload_id":  uploadID,
-	})
-}
-
 var assetContentTypes = map[string]string{
 	"image/png":     "png",
 	"image/jpeg":    "jpg",

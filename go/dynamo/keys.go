@@ -47,6 +47,10 @@ func EmailGSI1PK(email string) string { return "EMAIL#" + strings.ToLower(email)
 // GSI1 keys for invite lookup
 func InviteGSI1PK(email string) string { return "INVITE#" + strings.ToLower(email) }
 
+// Upload keys
+func UploadPK(id string) string          { return "UPLOAD#" + id }
+func UserUploadGSI1PK(uid string) string { return "USERUPLOAD#" + uid }
+
 // GSI1 keys for leaderboard
 func LeaderboardGSI1PK(layoutID, class string) string {
 	return "LAYOUT#" + layoutID + "#CLASS#" + class

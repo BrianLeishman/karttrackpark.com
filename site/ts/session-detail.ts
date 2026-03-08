@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken, isLoggedIn, login } from './auth';
-import { esc, dateFmt } from './html';
+import { esc, dateFmt, formatLapTime, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel, buildSessionInfoPills, initTooltips, scoringUsesTotalTime, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml } from './html';
+import { openUploadManager } from './upload-manager';
 import { getEntityId, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl } from './url-utils';
+import { driverDetailUrl } from './session-driver-detail';
 
 interface Session {
     session_id: string;
@@ -11,7 +13,14 @@ interface Session {
     session_name?: string;
     session_type?: string;
     session_order?: number;
+    layout_id?: string;
+    reverse?: boolean;
+    start_type?: string;
+    lap_limit?: number;
+    class_ids?: string[];
+    notes?: string;
     best_lap_ms?: number;
+    best_lap_driver_name?: string;
     lap_count?: number;
     ingest_status?: string;
     ingest_error?: string;
@@ -22,6 +31,8 @@ interface LapItem {
     lap_no: number;
     lap_time_ms: number;
     max_speed?: number;
+    uid: string;
+    driver_name?: string;
 }
 
 interface EventDetail {
@@ -63,6 +74,18 @@ interface TrackPublic {
     logo_key?: string;
 }
 
+interface LayoutOption {
+    layout_id: string;
+    name: string;
+    is_default?: boolean;
+}
+
+interface KartClassOption {
+    class_id: string;
+    name: string;
+    is_default?: boolean;
+}
+
 interface Result {
     uid: string;
     driver_name: string;
@@ -74,17 +97,188 @@ interface Result {
     penalties?: string;
 }
 
-function formatLapTime(ms: number): string {
-    if (ms <= 0) {
-        return '\u2014';
+interface SectorData {
+    lap_no: number;
+    uid: string;
+    sectors: number[];
+}
+
+// Computed driver standing from lap data
+interface DriverStanding {
+    uid: string;
+    name: string;
+    laps: LapItem[];
+    totalTimeMs: number;
+    bestLapMs: number;
+    bestLapNo: number;
+    lapCount: number;
+    position: number;
+    gap: string;
+}
+
+function buildDriverStandings(laps: LapItem[], sessionType?: string): DriverStanding[] {
+    // Group laps by driver UID
+    const byDriver = new Map<string, LapItem[]>();
+    for (const l of laps) {
+        const arr = byDriver.get(l.uid) ?? [];
+        arr.push(l);
+        byDriver.set(l.uid, arr);
     }
-    const totalSeconds = ms / 1000;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    if (minutes > 0) {
-        return `${String(minutes)}:${seconds.toFixed(3).padStart(6, '0')}`;
+
+    const useTotalTime = scoringUsesTotalTime(sessionType);
+    const standings: DriverStanding[] = [];
+
+    for (const [uid, driverLaps] of byDriver) {
+        let bestMs = Infinity;
+        let bestNo = 0;
+        let totalMs = 0;
+        for (const l of driverLaps) {
+            totalMs += l.lap_time_ms;
+            if (l.lap_time_ms < bestMs) {
+                bestMs = l.lap_time_ms;
+                bestNo = l.lap_no;
+            }
+        }
+        // Use driver_name from any lap (they all share the same uid)
+        const name = driverLaps[0].driver_name ?? uid;
+        standings.push({
+            uid,
+            name,
+            laps: driverLaps,
+            totalTimeMs: totalMs,
+            bestLapMs: bestMs === Infinity ? 0 : bestMs,
+            bestLapNo: bestNo,
+            lapCount: driverLaps.length,
+            position: 0,
+            gap: '',
+        });
     }
-    return seconds.toFixed(3);
+
+    // Sort by scoring method
+    standings.sort((a, b) => {
+        if (useTotalTime) {
+            return a.totalTimeMs - b.totalTimeMs;
+        }
+        return a.bestLapMs - b.bestLapMs;
+    });
+
+    // Assign positions and gaps
+    let leaderVal = 0;
+    if (standings.length > 0) {
+        leaderVal = useTotalTime ? standings[0].totalTimeMs : standings[0].bestLapMs;
+    }
+    for (let i = 0; i < standings.length; i++) {
+        standings[i].position = i + 1;
+        if (i === 0) {
+            standings[i].gap = '';
+        } else {
+            const val = useTotalTime ? standings[i].totalTimeMs : standings[i].bestLapMs;
+            const diff = val - leaderVal;
+            standings[i].gap = '+' + formatLapTime(diff);
+        }
+    }
+
+    return standings;
+}
+
+const TROPHY_ICONS = ['fa-trophy', 'fa-medal', 'fa-award'];
+const TROPHY_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
+
+interface SectorDisplay {
+    driverBests: Map<string, number[]>;
+    overallBest: number[];
+    overallWorst: number[];
+}
+
+function buildSectorDisplay(allSectors: SectorData[]): SectorDisplay | null {
+    if (allSectors.length === 0) {
+        return null;
+    }
+
+    const numSectors = allSectors[0].sectors.length;
+    const byUid = new Map<string, SectorData[]>();
+    for (const s of allSectors) {
+        const arr = byUid.get(s.uid) ?? [];
+        arr.push(s);
+        byUid.set(s.uid, arr);
+    }
+
+    const driverBests = new Map<string, number[]>();
+    for (const [uid, driverSectors] of byUid) {
+        const bests = Array.from({ length: numSectors }, () => Infinity);
+        for (const s of driverSectors) {
+            for (let i = 0; i < numSectors; i++) {
+                if (s.sectors[i] > 0 && s.sectors[i] < bests[i]) {
+                    bests[i] = s.sectors[i];
+                }
+            }
+        }
+        driverBests.set(uid, bests);
+    }
+
+    const overallBest = Array.from({ length: numSectors }, () => Infinity);
+    const overallWorst = Array.from({ length: numSectors }, () => 0);
+    for (const bests of driverBests.values()) {
+        for (let i = 0; i < numSectors; i++) {
+            if (bests[i] < overallBest[i]) {
+                overallBest[i] = bests[i];
+            }
+            if (bests[i] !== Infinity && bests[i] > overallWorst[i]) {
+                overallWorst[i] = bests[i];
+            }
+        }
+    }
+
+    return { driverBests, overallBest, overallWorst };
+}
+
+function standingsTableHtml(drivers: DriverStanding[], useTotalTime: boolean, overallBestMs: number, sectorDisplay: SectorDisplay | null, sessionId?: string, sessionName?: string): string {
+    if (drivers.length === 0) {
+        return '';
+    }
+    return `
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr class="text-body-secondary small">
+                    <th style="width:3rem"></th>
+                    <th>Driver</th>
+                    <th class="text-end">Best Lap</th>
+                    ${sectorDisplay ? '<th>Sectors</th>' : ''}
+                    <th class="text-end">${useTotalTime ? 'Total Time' : 'Total'}</th>
+                    <th class="text-end">Gap</th>
+                    <th class="text-center" style="width:4rem">Laps</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${drivers.map(d => {
+        const isBestOverall = d.bestLapMs === overallBestMs && overallBestMs > 0;
+        const trophyIdx = d.position <= 3 ? d.position - 1 : -1;
+        const posHtml = trophyIdx >= 0 ?
+            `<i class="fa-solid ${TROPHY_ICONS[trophyIdx]}" style="color:${TROPHY_COLORS[trophyIdx]}"></i>` :
+            `<span class="text-body-secondary">${d.position}</span>`;
+        const href = sessionId ? driverDetailUrl(sessionId, sessionName ?? 'session', d.uid, d.name) : '';
+        let sectorHtml = '';
+        if (sectorDisplay) {
+            const bests = sectorDisplay.driverBests.get(d.uid);
+            sectorHtml = `<td class="sector-blocks">${bests ? sectorBlocksHtml(bests, sectorDisplay.overallBest, sectorDisplay.overallWorst) : ''}</td>`;
+        }
+        return `<tr${href ? ` data-href="${href}" style="cursor:pointer"` : ''} data-uid="${d.uid}">
+                        <td class="text-center">${posHtml}</td>
+                        <td class="fw-semibold">${esc(d.name)}</td>
+                        <td class="text-end font-monospace${isBestOverall ? ' text-success fw-semibold' : ''}">
+                            ${formatLapTime(d.bestLapMs)}
+                            <span class="text-body-tertiary" style="font-size:.75em">L${d.bestLapNo}</span>
+                        </td>
+                        ${sectorHtml}
+                        <td class="text-end font-monospace">${formatLapTime(d.totalTimeMs)}</td>
+                        <td class="text-end font-monospace text-body-secondary">${d.gap || '\u2014'}</td>
+                        <td class="text-center">${d.lapCount}</td>
+                    </tr>`;
+    }).join('')}
+            </tbody>
+        </table>
+    </div>`;
 }
 
 export async function renderSessionDetail(container: HTMLElement): Promise<void> {
@@ -99,16 +293,19 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
     let session: Session;
     let results: Result[];
     let laps: LapItem[];
+    let allSectors: SectorData[];
 
     try {
-        const [sessionResp, resultsResp, lapsResp] = await Promise.all([
+        const [sessionResp, resultsResp, lapsResp, sectorsResp] = await Promise.all([
             axios.get<Session>(`${apiBase}/api/sessions/${sessionId}/public`),
             axios.get<Result[]>(`${apiBase}/api/sessions/${sessionId}/results`).catch((): { data: Result[] } => ({ data: [] })),
             axios.get<LapItem[]>(`${apiBase}/api/sessions/${sessionId}/laps`).catch((): { data: LapItem[] } => ({ data: [] })),
+            axios.get<SectorData[]>(`${apiBase}/api/sessions/${sessionId}/sectors`).catch((): { data: SectorData[] } => ({ data: [] })),
         ]);
         session = sessionResp.data;
         results = resultsResp.data;
         laps = lapsResp.data;
+        allSectors = sectorsResp.data;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 404) {
             container.innerHTML = '<div class="alert alert-warning">Session not found.</div>';
@@ -118,35 +315,41 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
         return;
     }
 
-    // Check admin role
     const token = getAccessToken();
-    const membershipCheck: Promise<string | null> = token ?
-        axios.get<{ role: string }>(`${apiBase}/api/tracks/${session.track_id}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-        }).then(resp => resp.data.role, () => null) :
-        Promise.resolve(null);
 
-    // Fetch event + track for breadcrumbs
+    // Fetch event + track + layouts + classes for breadcrumbs, role check, and session info
     let event: EventDetail | null = null;
     let track: TrackPublic | null = null;
-    let role: string | null = null;
+    let canManage = false;
+    let layouts: LayoutOption[] = [];
+    let classes: KartClassOption[] = [];
 
     try {
-        const [trackResp, memberResult, eventResult] = await Promise.all([
+        const membershipCheck: Promise<string | null> = token ?
+            axios.get<{ role: string }>(`${apiBase}/api/tracks/${session.track_id}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            }).then(resp => resp.data.role, () => null) :
+            Promise.resolve(null);
+
+        const [trackResp, eventResult, memberRole, layoutsResp, classesResp] = await Promise.all([
             axios.get<TrackPublic>(`${apiBase}/api/tracks/${session.track_id}/public`),
-            membershipCheck,
             session.event_id ?
                 axios.get<EventDetail>(`${apiBase}/api/events/${session.event_id}`).then(r => r.data, () => null) :
                 Promise.resolve(null),
+            membershipCheck,
+            axios.get<LayoutOption[]>(`${apiBase}/api/tracks/${session.track_id}/layouts`).
+                catch((): { data: LayoutOption[] } => ({ data: [] })),
+            axios.get<KartClassOption[]>(`${apiBase}/api/tracks/${session.track_id}/classes`).
+                catch((): { data: KartClassOption[] } => ({ data: [] })),
         ]);
         track = trackResp.data;
-        role = memberResult;
         event = eventResult;
+        canManage = memberRole === 'owner' || memberRole === 'admin';
+        layouts = layoutsResp.data;
+        classes = classesResp.data;
     } catch {
         // Non-fatal
     }
-
-    const canManage = role === 'owner' || role === 'admin';
     const sessionName = session.session_name ?? 'Session';
     document.title = `${sessionName} \u2014 Kart Track Park`;
 
@@ -215,152 +418,36 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
         );
     }
 
-    // Build unified driver list: merge series registrations with results
-    interface DriverRow {
-        name: string;
-        position: number;
-        fastestLapMs: number | null;
-        points: number | null;
-        kartId: string | null;
-        hasResult: boolean;
+    // Session info pills
+    const layoutMap = new Map(layouts.map(l => [l.layout_id, l.name]));
+    const classMap = new Map(classes.map(c => [c.class_id, c.name]));
+    const infoPills = buildSessionInfoPills(
+        session,
+        layoutMap,
+        classMap,
+    );
+
+    const useTotalTime = scoringUsesTotalTime(session.session_type);
+
+    // Build driver standings from laps
+    const standings = buildDriverStandings(laps, session.session_type);
+    const overallBestMs = standings.length > 0 ? Math.min(...standings.map(d => d.bestLapMs).filter(ms => ms > 0)) : 0;
+
+    // Build sector display data
+    const sectorDisplay = buildSectorDisplay(allSectors);
+
+    // If no lap data but we have registrations/results, fall back to simple driver list
+    let driversSection: string;
+    if (standings.length > 0) {
+        driversSection = standingsTableHtml(standings, useTotalTime, overallBestMs, sectorDisplay, session.session_id, session.session_name);
+    } else if (confirmedRegs.length > 0 || results.length > 0) {
+        driversSection = buildFallbackDriverList(confirmedRegs, results);
+    } else {
+        driversSection = '<p class="text-body-secondary">No drivers yet.</p>';
     }
 
-    const resultByUid = new Map(results.map(r => [r.uid, r]));
-    const seenUids = new Set<string>();
-    const driverRows: DriverRow[] = [];
-
-    // First add all series registrants (preserves registration order, results get sorted later)
-    for (const reg of confirmedRegs) {
-        seenUids.add(reg.uid);
-        const result = resultByUid.get(reg.uid);
-        driverRows.push({
-            name: reg.driver_name,
-            position: result?.position ?? 0,
-            fastestLapMs: result?.fastest_lap_ms ?? null,
-            points: result?.points ?? null,
-            kartId: result?.kart_id ?? null,
-            hasResult: Boolean(result),
-        });
-    }
-
-    // Then add any results for drivers not in the series registrations
-    for (const r of results) {
-        if (!seenUids.has(r.uid)) {
-            driverRows.push({
-                name: r.driver_name,
-                position: r.position,
-                fastestLapMs: r.fastest_lap_ms ?? null,
-                points: r.points ?? null,
-                kartId: r.kart_id ?? null,
-                hasResult: true,
-            });
-        }
-    }
-
-    // Sort: drivers with results first (by position/fastest lap), then drivers without results alphabetically
-    driverRows.sort((a, b) => {
-        if (a.hasResult && !b.hasResult) {
-            return -1;
-        }
-        if (!a.hasResult && b.hasResult) {
-            return 1;
-        }
-        if (a.hasResult && b.hasResult) {
-            if (a.position && b.position) {
-                return a.position - b.position;
-            }
-            if (a.position && !b.position) {
-                return -1;
-            }
-            if (!a.position && b.position) {
-                return 1;
-            }
-            const aLap = a.fastestLapMs ?? Infinity;
-            const bLap = b.fastestLapMs ?? Infinity;
-            if (aLap !== bLap) {
-                return aLap - bLap;
-            }
-        }
-        return a.name.localeCompare(b.name);
-    });
-
-    const fastestLap = driverRows.reduce((min, d) => {
-        const lap = d.fastestLapMs ?? Infinity;
-        return lap < min ? lap : min;
-    }, Infinity);
-
-    const hasPoints = driverRows.some(d => d.points);
-    const hasKarts = driverRows.some(d => d.kartId);
-
-    const driversHtml = driverRows.length > 0 ? `
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th style="width:3rem">#</th>
-                    <th>Driver</th>
-                    <th class="text-end">Fastest Lap</th>
-                    ${hasPoints ? '<th class="text-end">Pts</th>' : ''}
-                    ${hasKarts ? '<th>Kart</th>' : ''}
-                </tr>
-            </thead>
-            <tbody>
-                ${driverRows.map((d, i) => {
-        const isFastest = d.fastestLapMs === fastestLap && fastestLap < Infinity;
-        const posText = d.hasResult ? String(d.position || i + 1) : '';
-        let lapText = '\u2014';
-        if (d.fastestLapMs) {
-            lapText = formatLapTime(d.fastestLapMs);
-        } else if (!d.hasResult) {
-            lapText = '<span class="text-body-secondary">\u2014</span>';
-        }
-        return `<tr${!d.hasResult ? ' class="text-body-secondary"' : ''}>
-                        <td class="fw-semibold text-body-secondary">${posText}</td>
-                        <td>${esc(d.name)}</td>
-                        <td class="text-end font-monospace${isFastest ? ' text-success fw-semibold' : ''}">${lapText}</td>
-                        ${hasPoints ? `<td class="text-end">${d.points ?? ''}</td>` : ''}
-                        ${hasKarts ? `<td>${esc(d.kartId ?? '')}</td>` : ''}
-                    </tr>`;
-    }).join('')}
-            </tbody>
-        </table>` :
-        '<p class="text-body-secondary">No drivers yet.</p>';
-
-    // Laps table
-    const bestLap = laps.reduce((min, l) => l.lap_time_ms < min ? l.lap_time_ms : min, Infinity);
-    const hasSpeed = laps.some(l => l.max_speed);
-    const lapsHtml = laps.length > 0 ? `
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th style="width:3rem">Lap</th>
-                    <th class="text-end">Time</th>
-                    ${hasSpeed ? '<th class="text-end">Max Speed</th>' : ''}
-                </tr>
-            </thead>
-            <tbody>
-                ${laps.map(l => {
-        const isBest = l.lap_time_ms === bestLap && bestLap < Infinity;
-        return `<tr>
-                        <td class="fw-semibold text-body-secondary">${l.lap_no}</td>
-                        <td class="text-end font-monospace${isBest ? ' text-success fw-semibold' : ''}">${formatLapTime(l.lap_time_ms)}</td>
-                        ${hasSpeed ? `<td class="text-end">${l.max_speed ? `${l.max_speed.toFixed(1)} mph` : '\u2014'}</td>` : ''}
-                    </tr>`;
-    }).join('')}
-            </tbody>
-        </table>` : '';
-
-    const typeBadgeColors: Record<string, string> = {
-        practice: 'text-bg-secondary',
-        quali: 'text-bg-info',
-        heat: 'text-bg-warning',
-        final: 'text-bg-danger',
-        driver_meeting: 'text-bg-secondary',
-    };
     const sessionType = session.session_type ?? '';
-    const badgeColor = typeBadgeColors[sessionType] ?? 'text-bg-secondary';
-
-    const ingestStatus = session.ingest_status;
-    const isIngesting = ingestStatus === 'pending' || ingestStatus === 'processing';
+    const badgeColor = SESSION_TYPE_BADGE_COLORS[sessionType] ?? 'text-bg-secondary';
 
     // Build action buttons
     const actionButtons: string[] = [];
@@ -375,7 +462,10 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
         actionButtons.push('<span class="badge text-bg-success d-flex align-items-center gap-1"><i class="fa-solid fa-check"></i> Registered</span>');
     }
     if (canManage) {
-        actionButtons.push('<button class="btn btn-sm btn-outline-primary" id="upload-data-btn"><i class="fa-solid fa-upload me-1"></i>Upload Data</button>');
+        actionButtons.push('<button class="btn btn-sm btn-outline-secondary" id="edit-session-btn"><i class="fa-solid fa-pen me-1"></i>Edit</button>');
+    }
+    if (loggedIn) {
+        actionButtons.push('<button class="btn btn-sm btn-outline-primary" id="upload-laps-btn"><i class="fa-solid fa-upload me-1"></i>Upload Laps</button>');
     }
 
     container.innerHTML = `
@@ -385,43 +475,16 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
             <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
             <span class="active">${esc(sessionName)}</span>
         </div>` : ''}
-        <div class="d-flex align-items-center gap-2 mb-4">
+        <div class="d-flex align-items-center gap-2 mb-2">
             <h1 class="mb-0">${esc(sessionName)}</h1>
             ${sessionType ? `<span class="badge ${badgeColor}">${sessionType.replace('_', ' ')}</span>` : ''}
             ${actionButtons.length > 0 ? `<div class="ms-auto d-flex align-items-center gap-2">${actionButtons.join('')}</div>` : ''}
         </div>
-        <div id="ingest-status"></div>
-        ${lapsHtml ? `<h3 class="mb-3">Laps</h3><div>${lapsHtml}</div>` : ''}
-        <h3 class="mb-3 mt-4">Drivers${driverRows.length > 0 ? ` <span class="badge text-bg-secondary fw-normal">${driverRows.length}</span>` : ''}</h3>
-        <div>${driversHtml}</div>
-
-        <!-- Upload Modal -->
-        <div class="modal fade" id="upload-modal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Upload Telemetry Data</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="xrk-file" class="form-label">AIM Solo XRK File</label>
-                            <input type="file" class="form-control" id="xrk-file" accept=".xrk">
-                        </div>
-                        <div id="upload-progress" class="d-none">
-                            <div class="progress mb-2">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" id="upload-bar" style="width:0%"></div>
-                            </div>
-                            <small class="text-body-secondary" id="upload-status-text">Uploading...</small>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="upload-submit-btn" disabled>Upload</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        ${infoPills.length > 0 ? `
+        <div class="d-flex flex-wrap gap-3 text-body-secondary small mb-4">
+            ${infoPills.join('')}
+        </div>` : '<div class="mb-4"></div>'}
+        ${driversSection}
 
         <!-- Join Series Confirmation Modal -->
         <div class="modal fade" id="join-modal" tabindex="-1">
@@ -470,6 +533,19 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
         </div>
     `;
 
+    // Init Bootstrap tooltips on info pills
+    initTooltips(container);
+
+    // Wire up clickable driver rows
+    container.querySelectorAll<HTMLElement>('tr[data-href]').forEach(row => {
+        row.addEventListener('click', () => {
+            const href = row.dataset.href;
+            if (href) {
+                window.location.href = href;
+            }
+        });
+    });
+
     // Wire up Join Series
     if (canJoin && seriesCtx && series) {
         if (loggedIn) {
@@ -516,113 +592,269 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
         }
     }
 
-    // Wire up upload functionality
+    // Wire up edit session button
     if (canManage) {
-        const bs = await import('bootstrap');
-        const modalEl = document.getElementById('upload-modal');
-        const fileInput = document.querySelector<HTMLInputElement>('#xrk-file');
-        const submitBtn = document.querySelector<HTMLButtonElement>('#upload-submit-btn');
-        const progressDiv = document.getElementById('upload-progress');
-        const progressBar = document.getElementById('upload-bar');
-        const statusText = document.getElementById('upload-status-text');
-
-        if (modalEl && fileInput && submitBtn && progressDiv && progressBar && statusText) {
-            const modal = new bs.Modal(modalEl);
-
-            document.getElementById('upload-data-btn')?.addEventListener('click', () => modal.show());
-
-            fileInput.addEventListener('change', () => {
-                submitBtn.disabled = !fileInput.files?.length;
-            });
-
-            submitBtn.addEventListener('click', async () => {
-                const file = fileInput.files?.[0];
-                if (!file) {
-                    return;
-                }
-
-                submitBtn.disabled = true;
-                progressDiv.classList.remove('d-none');
-                progressBar.style.width = '0%';
-                statusText.textContent = 'Getting upload URL...';
-
-                try {
-                    const { data: uploadData } = await api.post<{ upload_url: string; key: string }>('/api/upload-url', {
-                        track_id: session.track_id,
-                        session_id: session.session_id,
-                        filename: file.name,
-                    });
-
-                    statusText.textContent = 'Starting ingest...';
-                    progressBar.style.width = '10%';
-                    await api.post(`/api/sessions/${sessionId}/ingest`, { s3_key: uploadData.key });
-
-                    statusText.textContent = 'Uploading file...';
-                    await axios.put(uploadData.upload_url, file, {
-                        headers: { 'Content-Type': 'application/octet-stream' },
-                        onUploadProgress: e => {
-                            if (e.total) {
-                                const pct = 10 + Math.round((e.loaded / e.total) * 80);
-                                progressBar.style.width = `${pct}%`;
-                            }
-                        },
-                    });
-
-                    progressBar.style.width = '100%';
-                    statusText.textContent = 'Upload complete. Processing...';
-
-                    modal.hide();
-                    startPolling(sessionId, container);
-                } catch {
-                    statusText.textContent = 'Upload failed. Please try again.';
-                    submitBtn.disabled = false;
-                }
-            });
-        }
+        document.getElementById('edit-session-btn')?.addEventListener('click', () => {
+            void openEditSessionModal(session, layouts, classes, container);
+        });
     }
 
-    // Auto-poll if currently ingesting
-    if (isIngesting) {
-        startPolling(sessionId, container);
-    }
-
-    // Show ingest error if present
-    if (ingestStatus === 'error' && session.ingest_error) {
-        const statusDiv = document.getElementById('ingest-status');
-        if (statusDiv) {
-            statusDiv.innerHTML = `<div class="alert alert-danger alert-dismissible">
-                <strong>Ingest error:</strong> ${esc(session.ingest_error)}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>`;
-        }
+    // Wire up upload laps button
+    if (loggedIn) {
+        document.getElementById('upload-laps-btn')?.addEventListener('click', () => {
+            void openUploadManager({
+                trackId: session.track_id,
+                eventId: session.event_id,
+                sessionId: session.session_id,
+                onComplete: () => void renderSessionDetail(container),
+            });
+        });
     }
 }
 
-function startPolling(sessionId: string, container: HTMLElement): void {
-    const statusDiv = container.querySelector('#ingest-status');
-    if (statusDiv) {
-        statusDiv.innerHTML = `<div class="alert alert-info d-flex align-items-center gap-2">
-            <div class="spinner-border spinner-border-sm"></div>
-            Processing telemetry data...
-        </div>`;
+function buildFallbackDriverList(regs: Registration[], results: Result[]): string {
+    interface FallbackRow {
+        name: string;
+        position: number;
+        fastestLapMs: number | null;
+        hasResult: boolean;
     }
 
-    const poll = setInterval(async () => {
-        try {
-            const { data } = await axios.get<Session>(`${apiBase}/api/sessions/${sessionId}/public`);
-            if (data.ingest_status === 'complete') {
-                clearInterval(poll);
-                window.location.reload();
-            } else if (data.ingest_status === 'error') {
-                clearInterval(poll);
-                if (statusDiv) {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">
-                        <strong>Ingest error:</strong> ${esc(data.ingest_error ?? 'Unknown error')}
-                    </div>`;
-                }
-            }
-        } catch {
-            // Keep polling on network errors
+    const resultByUid = new Map(results.map(r => [r.uid, r]));
+    const seenUids = new Set<string>();
+    const rows: FallbackRow[] = [];
+
+    for (const reg of regs) {
+        seenUids.add(reg.uid);
+        const result = resultByUid.get(reg.uid);
+        rows.push({
+            name: reg.driver_name,
+            position: result?.position ?? 0,
+            fastestLapMs: result?.fastest_lap_ms ?? null,
+            hasResult: Boolean(result),
+        });
+    }
+
+    for (const r of results) {
+        if (!seenUids.has(r.uid)) {
+            rows.push({
+                name: r.driver_name,
+                position: r.position,
+                fastestLapMs: r.fastest_lap_ms ?? null,
+                hasResult: true,
+            });
         }
-    }, 2000);
+    }
+
+    rows.sort((a, b) => {
+        if (a.hasResult && !b.hasResult) {
+            return -1;
+        }
+        if (!a.hasResult && b.hasResult) {
+            return 1;
+        }
+        if (a.hasResult && b.hasResult) {
+            if (a.position && b.position) {
+                return a.position - b.position;
+            }
+            const aLap = a.fastestLapMs ?? Infinity;
+            const bLap = b.fastestLapMs ?? Infinity;
+            if (aLap !== bLap) {
+                return aLap - bLap;
+            }
+        }
+        return a.name.localeCompare(b.name);
+    });
+
+    return `<table class="table table-hover align-middle mb-0">
+        <thead>
+            <tr class="text-body-secondary small">
+                <th style="width:3rem">#</th>
+                <th>Driver</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${rows.map((d, i) => `<tr${!d.hasResult ? ' class="text-body-secondary"' : ''}>
+                <td class="fw-semibold text-body-secondary">${d.hasResult ? String(d.position || i + 1) : ''}</td>
+                <td>${esc(d.name)}</td>
+            </tr>`).join('')}
+        </tbody>
+    </table>`;
+}
+
+// --- Edit Session Modal ---
+
+async function openEditSessionModal(session: Session, layouts: LayoutOption[], classes: KartClassOption[], container: HTMLElement): Promise<void> {
+    const bs = await import('bootstrap');
+
+    // Need full session data for fields not in the public endpoint
+    interface FullSessionData {
+        start_type?: string;
+        layout_id?: string;
+        lap_limit?: number;
+        notes?: string;
+        reverse?: boolean;
+        class_ids?: string[];
+    }
+    let full: FullSessionData = {};
+    try {
+        const resp = await api.get<{ session: FullSessionData }>(`/api/sessions/${session.session_id}`);
+        full = resp.data.session;
+    } catch {
+        // Use empty defaults
+    }
+
+    const fsStartType = full.start_type ?? '';
+    const fsLayoutId = full.layout_id ?? '';
+    const fsLapLimit = full.lap_limit ?? 0;
+    const fsNotes = full.notes ?? '';
+    const fsReverse = full.reverse ?? false;
+
+    const typeOptions = SESSION_TYPES.map(t =>
+        `<option value="${t}" ${session.session_type === t ? 'selected' : ''}>${typeLabel(t)}</option>`,
+    ).join('');
+
+    const startTypeOptions = START_TYPES.map(t =>
+        `<option value="${t}" ${fsStartType === t ? 'selected' : ''}>${startTypeLabel(t)}</option>`,
+    ).join('');
+
+    const layoutOptions = layouts.map(l =>
+        `<option value="${l.layout_id}" ${fsLayoutId === l.layout_id ? 'selected' : ''}>${esc(l.name)}${l.is_default ? ' (default)' : ''}</option>`,
+    ).join('');
+
+    const classIds = full.class_ids ?? [];
+    const classCheckboxes = classes.map(kc => {
+        const checked = classIds.includes(kc.class_id);
+        const cbId = `edit-s-class-${kc.class_id}`;
+        return `<div class="form-check form-check-inline mb-0">
+            <input type="checkbox" class="form-check-input edit-s-class" id="${cbId}" data-class-id="${kc.class_id}" ${checked ? 'checked' : ''}>
+            <label class="form-check-label small" for="${cbId}">${esc(kc.name)}</label>
+        </div>`;
+    }).join('');
+
+    const modalId = 'edit-session-modal';
+    let modalEl = document.getElementById(modalId);
+    if (modalEl) {
+        modalEl.remove();
+    }
+
+    modalEl = document.createElement('div');
+    modalEl.id = modalId;
+    modalEl.className = 'modal fade';
+    modalEl.tabIndex = -1;
+    modalEl.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fa-solid fa-pen me-2"></i>Edit Session</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Session Name</label>
+                        <input type="text" class="form-control" id="edit-s-name" value="${esc(session.session_name ?? '')}">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label fw-semibold">Type</label>
+                            <select class="form-select" id="edit-s-type">${typeOptions}</select>
+                        </div>
+                        <div class="col">
+                            <label class="form-label fw-semibold">Start Type</label>
+                            <select class="form-select" id="edit-s-start-type">
+                                <option value="">None</option>
+                                ${startTypeOptions}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label fw-semibold">Layout</label>
+                            <select class="form-select" id="edit-s-layout">${layoutOptions}</select>
+                        </div>
+                        <div class="col-auto d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input type="checkbox" class="form-check-input" id="edit-s-reverse" ${fsReverse ? 'checked' : ''}>
+                                <label class="form-check-label" for="edit-s-reverse">Reverse</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Lap Limit</label>
+                        <input type="number" class="form-control" id="edit-s-lap-limit" min="0" placeholder="No limit" value="${fsLapLimit || ''}">
+                    </div>
+                    ${classes.length > 0 ? `<div class="mb-3">
+                        <label class="form-label fw-semibold">Classes</label>
+                        <div>${classCheckboxes}</div>
+                    </div>` : ''}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Notes</label>
+                        <input type="text" class="form-control" id="edit-s-notes" value="${esc(fsNotes)}">
+                    </div>
+                    <div class="alert alert-danger d-none mb-0" id="edit-s-error"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="edit-s-save">
+                        <i class="fa-solid fa-check me-1"></i>Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modalEl);
+
+    const modal = new bs.Modal(modalEl);
+    modal.show();
+
+    modalEl.addEventListener('hidden.bs.modal', () => {
+        modalEl?.remove();
+    }, { once: true });
+
+    modalEl.querySelector('#edit-s-save')?.addEventListener('click', async () => {
+        const saveBtn = modalEl?.querySelector<HTMLButtonElement>('#edit-s-save');
+        const errorEl = modalEl?.querySelector('#edit-s-error');
+        if (!saveBtn || !modalEl) {
+            return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving\u2026';
+        if (errorEl) {
+            errorEl.classList.add('d-none');
+        }
+
+        try {
+            const editedClassIds: string[] = [];
+            modalEl.querySelectorAll('.edit-s-class').forEach(cb => {
+                if (cb instanceof HTMLInputElement && cb.checked && cb.dataset.classId) {
+                    editedClassIds.push(cb.dataset.classId);
+                }
+            });
+
+            await api.put(`/api/sessions/${session.session_id}`, {
+                sessionName: modalEl.querySelector<HTMLInputElement>('#edit-s-name')?.value.trim() ?? '',
+                sessionType: modalEl.querySelector<HTMLSelectElement>('#edit-s-type')?.value ?? '',
+                layoutId: modalEl.querySelector<HTMLSelectElement>('#edit-s-layout')?.value ?? '',
+                reverse: modalEl.querySelector<HTMLInputElement>('#edit-s-reverse')?.checked ?? false,
+                startType: modalEl.querySelector<HTMLSelectElement>('#edit-s-start-type')?.value ?? '',
+                lapLimit: parseInt(modalEl.querySelector<HTMLInputElement>('#edit-s-lap-limit')?.value ?? '', 10) || 0,
+                notes: modalEl.querySelector<HTMLInputElement>('#edit-s-notes')?.value.trim() ?? '',
+                classIds: editedClassIds,
+            });
+
+            modal.hide();
+            await renderSessionDetail(container);
+        } catch (err: unknown) {
+            let msg = 'Save failed. Please try again.';
+            if (axios.isAxiosError<{ error?: string }>(err) && typeof err.response?.data?.error === 'string') {
+                msg = err.response.data.error;
+            }
+            if (errorEl) {
+                errorEl.textContent = msg;
+                errorEl.classList.remove('d-none');
+            }
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save';
+        }
+    });
 }

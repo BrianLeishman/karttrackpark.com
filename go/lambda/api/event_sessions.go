@@ -39,6 +39,8 @@ func handleCreateEventSession(w http.ResponseWriter, r *http.Request) {
 		SessionOrder int      `json:"session_order"`
 		LayoutID     string   `json:"layout_id"`
 		Reverse      bool     `json:"reverse"`
+		StartType    string   `json:"start_type"`
+		LapLimit     int      `json:"lap_limit"`
 		ClassIDs     []string `json:"class_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -60,6 +62,8 @@ func handleCreateEventSession(w http.ResponseWriter, r *http.Request) {
 		SessionOrder: req.SessionOrder,
 		LayoutID:     req.LayoutID,
 		Reverse:      req.Reverse,
+		StartType:    req.StartType,
+		LapLimit:     req.LapLimit,
 		ClassIDs:     req.ClassIDs,
 	})
 	if err != nil {
@@ -75,6 +79,8 @@ func handleCreateEventSession(w http.ResponseWriter, r *http.Request) {
 		SessionOrder: req.SessionOrder,
 		SessionType:  req.SessionType,
 		SessionName:  req.SessionName,
+		StartType:    req.StartType,
+		LapLimit:     req.LapLimit,
 	})
 	if err != nil {
 		log.Printf("add session to event error: %v", err)
@@ -96,6 +102,26 @@ func handleListEventSessions(w http.ResponseWriter, r *http.Request) {
 	}
 	if sessions == nil {
 		sessions = []dynamo.EventSession{}
+	}
+
+	// If ?full=true, fetch the full Session items
+	if r.URL.Query().Get("full") == "true" {
+		var fullSessions []dynamo.Session
+		for _, es := range sessions {
+			s, err := dynamo.GetSession(r.Context(), es.SessionID)
+			if err != nil {
+				log.Printf("get session %s error: %v", es.SessionID, err)
+				continue
+			}
+			if s != nil {
+				fullSessions = append(fullSessions, *s)
+			}
+		}
+		if fullSessions == nil {
+			fullSessions = []dynamo.Session{}
+		}
+		writeJSON(w, http.StatusOK, fullSessions)
+		return
 	}
 
 	writeJSON(w, http.StatusOK, sessions)

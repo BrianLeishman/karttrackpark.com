@@ -17,6 +17,8 @@ type FormatSession struct {
 	SessionType string   `dynamodbav:"sessionType" json:"session_type"`
 	Duration    int      `dynamodbav:"duration,omitempty" json:"duration,omitempty"`
 	LapCount    int      `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
+	LapLimit    int      `dynamodbav:"lapLimit,omitempty" json:"lap_limit,omitempty"`
+	StartType   string   `dynamodbav:"startType,omitempty" json:"start_type,omitempty"`
 	ClassIDs    []string `dynamodbav:"classIds,omitempty" json:"class_ids,omitempty"`
 	Notes       string   `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
 	LayoutID    string   `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`

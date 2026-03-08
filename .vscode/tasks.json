@@ -26,8 +26,20 @@
       }
     },
     {
+      "label": "dev:ingest",
+      "type": "shell",
+      "command": "pnpm dev:ingest",
+      "group": "build",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "dev",
+        "panel": "dedicated"
+      }
+    },
+    {
       "label": "dev:all",
-      "dependsOn": ["dev", "dev:api"],
+      "dependsOn": ["dev", "dev:api", "dev:ingest"],
       "group": "build",
       "problemMatcher": []
     },

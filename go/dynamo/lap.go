@@ -104,6 +104,38 @@ func ListLapsForSession(ctx context.Context, sessionID string) ([]Lap, error) {
 	return laps, nil
 }
 
+// DeleteLapsForUser deletes all laps belonging to a specific user in a session.
+func DeleteLapsForUser(ctx context.Context, sessionID, uid string) (int, error) {
+	laps, err := ListLapsForSession(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+
+	c, err := client()
+	if err != nil {
+		return 0, err
+	}
+
+	deleted := 0
+	for _, l := range laps {
+		if l.UID != uid {
+			continue
+		}
+		_, err := c.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+			TableName: aws.String(TableName),
+			Key: map[string]types.AttributeValue{
+				"pk": &types.AttributeValueMemberS{Value: SessionPK(sessionID)},
+				"sk": &types.AttributeValueMemberS{Value: LapSK(l.LapNo)},
+			},
+		})
+		if err != nil {
+			return deleted, fmt.Errorf("delete lap %d: %w", l.LapNo, err)
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
 // QueryFastestLaps returns verified laps from the leaderboard GSI, sorted by time ascending.
 func QueryFastestLaps(ctx context.Context, layoutID, class string, limit int32) ([]Lap, error) {
 	c, err := client()

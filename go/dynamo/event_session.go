@@ -20,6 +20,8 @@ type EventSession struct {
 	SessionOrder int    `dynamodbav:"sessionOrder" json:"session_order"`
 	SessionType  string `dynamodbav:"sessionType,omitempty" json:"session_type,omitempty"`
 	SessionName  string `dynamodbav:"sessionName,omitempty" json:"session_name,omitempty"`
+	StartType    string `dynamodbav:"startType,omitempty" json:"start_type,omitempty"`
+	LapLimit     int    `dynamodbav:"lapLimit,omitempty" json:"lap_limit,omitempty"`
 	CreatedAt    string `dynamodbav:"createdAt" json:"created_at"`
 }
 
@@ -47,6 +49,35 @@ func AddSessionToEvent(ctx context.Context, es EventSession) (*EventSession, err
 		return nil, fmt.Errorf("add session to event: %w", err)
 	}
 	return &es, nil
+}
+
+// UpdateEventSession updates fields on the EVENT#id / SESSION#sid link item.
+func UpdateEventSession(ctx context.Context, eventID, sessionID string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	c, err := client()
+	if err != nil {
+		return err
+	}
+
+	expr, names, values, err := BuildUpdateExpression(fields)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(TableName),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: EventPK(eventID)},
+			"sk": &types.AttributeValueMemberS{Value: EventSessionSK(sessionID)},
+		},
+		UpdateExpression:          aws.String(expr),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return err
 }
 
 // ListEventSessions returns all session links for an event.

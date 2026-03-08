@@ -17,13 +17,27 @@ interface TrackPublic {
     annotations?: TrackAnnotation[];
 }
 
-const cache = new Map<string, TrackPublic>();
+interface LayoutPublic {
+    layout_id: string;
+    name: string;
+    track_outline?: string;
+    annotations?: TrackAnnotation[];
+}
 
-function buildContent(track: TrackPublic): string {
+const cache = new Map<string, TrackPublic>();
+const layoutCache = new Map<string, LayoutPublic>();
+
+function buildContent(track: TrackPublic, layout?: LayoutPublic): string {
     const logo = track.logo_key ?
         `<img src="${assetsBase}/${track.logo_key}" alt="" width="32" height="32" class="rounded flex-shrink-0" style="object-fit:cover">` :
         '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:32px;height:32px"><i class="fa-solid fa-flag-checkered small"></i></div>';
     const location = [track.city, track.state].filter(Boolean).join(', ');
+    let subtitle = '';
+    if (layout) {
+        subtitle = esc(layout.name);
+    } else if (location) {
+        subtitle = esc(location);
+    }
     const hasMap = Boolean(track.map_bounds);
     const mapDiv = hasMap ? '<div class="track-hover-map" style="aspect-ratio:1/1;width:320px;border-radius:.25rem;margin-top:.5rem"></div>' : '';
 
@@ -32,14 +46,14 @@ function buildContent(track: TrackPublic): string {
             ${logo}
             <div>
                 <div class="fw-semibold">${esc(track.name)}</div>
-                ${location ? `<div class="text-body-secondary small">${esc(location)}</div>` : ''}
+                ${subtitle ? `<div class="text-body-secondary small">${subtitle}</div>` : ''}
             </div>
         </div>
         ${mapDiv}
     </div>`;
 }
 
-function initMap(popoverEl: HTMLElement, track: TrackPublic): void {
+function initMap(popoverEl: HTMLElement, track: TrackPublic, layout?: LayoutPublic): void {
     const mapEl = popoverEl.querySelector<HTMLElement>('.track-hover-map');
     if (!mapEl || !track.map_bounds) {
         return;
@@ -80,10 +94,14 @@ function initMap(popoverEl: HTMLElement, track: TrackPublic): void {
         maxZoom: 19, opacity: 0.7,
     }).addTo(map);
 
-    // Draw track outline if available
-    if (track.track_outline) {
+    // Use layout-specific outline/annotations if provided, else fall back to track defaults
+    const outline = layout?.track_outline ?? track.track_outline;
+    const annotations = layout?.annotations ?? track.annotations;
+
+    // Draw track outline
+    if (outline) {
         try {
-            const geojson: unknown = JSON.parse(track.track_outline);
+            const geojson: unknown = JSON.parse(outline);
             const geo = typeof geojson === 'object' && geojson !== null && 'geometry' in geojson ? geojson.geometry : undefined;
             const rawCoords = typeof geo === 'object' && geo !== null && 'coordinates' in geo ? geo.coordinates : undefined;
             const coords: unknown[] = Array.isArray(rawCoords) ? rawCoords : [];
@@ -96,8 +114,8 @@ function initMap(popoverEl: HTMLElement, track: TrackPublic): void {
         } catch { /* ignore bad JSON */ }
     }
 
-    // Draw turn and annotation markers (annotations includes layout + track turns)
-    for (const a of track.annotations ?? []) {
+    // Draw turn and annotation markers
+    for (const a of annotations ?? []) {
         let label = a.type === 'start_finish' ? 'S/F' : 'T?';
         if (a.type === 'turn' && a.number) {
             label = `T${a.number}`;
@@ -179,6 +197,23 @@ export function initTrackHoverCards(): void {
                 }
             }
 
+            // Optionally fetch a specific layout (overrides outline/annotations)
+            const layoutId = el.dataset.layoutId;
+            let layout: LayoutPublic | undefined;
+            if (layoutId) {
+                const cacheKey = `${trackId}/${layoutId}`;
+                layout = layoutCache.get(cacheKey);
+                if (!layout) {
+                    try {
+                        const resp = await axios.get<LayoutPublic>(`${apiBase}/api/tracks/${trackId}/layouts/${layoutId}`);
+                        layout = resp.data;
+                        layoutCache.set(cacheKey, layout);
+                    } catch {
+                        // Fall back to track defaults
+                    }
+                }
+            }
+
             // Verify we still want to show (mouse might have left)
             if (activeEl !== null && activeEl !== el) {
                 return;
@@ -191,14 +226,14 @@ export function initTrackHoverCards(): void {
                 trigger: 'manual',
                 placement: 'auto',
                 customClass: 'track-hover-popover',
-                content: buildContent(track),
+                content: buildContent(track, layout),
             });
             activePop.show();
 
             // Init map after popover is shown
             const popoverEl = document.querySelector('.popover:last-of-type');
             if (popoverEl instanceof HTMLElement && track) {
-                initMap(popoverEl, track);
+                initMap(popoverEl, track, layout);
 
                 // Allow hovering into the popover itself
                 popoverEl.addEventListener('mouseenter', () => clearTimers());

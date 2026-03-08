@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "pnpm -C site dev",
     "dev:api": "pnpm -C site dev:api",
+    "dev:ingest": "pnpm -C site dev:ingest",
     "build": "pnpm -C site build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

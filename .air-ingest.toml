@@ -1,0 +1,14 @@
+[build]
+cmd = "go build -o ./tmp/ingest ./go/lambda/ingest/"
+bin = "./tmp/ingest"
+full_bin = "AWS_PROFILE=ktp ./tmp/ingest"
+watch_dir = "go"
+include_ext = ["go"]
+exclude_dir = ["tmp", "site", "aws", "node_modules"]
+delay = 500
+
+[log]
+time = false
+
+[misc]
+clean_on_exit = true

@@ -78,6 +78,8 @@ interface FormatSession {
     session_type: string;
     duration?: number;
     lap_count?: number;
+    lap_limit?: number;
+    start_type?: string;
     class_ids?: string[];
     notes?: string;
     layout_id?: string;
@@ -789,6 +791,8 @@ function showNewEventModal(
                     ...s.class_ids?.length && { class_ids: s.class_ids },
                     ...s.layout_id && { layout_id: s.layout_id },
                     ...s.reverse && { reverse: true },
+                    ...s.start_type && { start_type: s.start_type },
+                    ...s.lap_limit && { lap_limit: s.lap_limit },
                 });
             }
         }

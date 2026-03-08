@@ -9,7 +9,7 @@ import { championshipFormHtml, bindChampionshipForm } from './championship-form'
 import type { ChampionshipFormBindings } from './championship-form';
 import { outlineMapHtml, bindOutlineMap } from './track-form';
 import type { TrackAnnotation } from './track-form';
-import { esc, emptyState, formatDate, typeBadge, typeLabel } from './html';
+import { esc, emptyState, formatDate, typeBadge, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel } from './html';
 import { uploadAsset } from './tracks';
 
 interface TrackPublic {
@@ -93,6 +93,8 @@ export interface FormatSession {
     session_type: string;
     duration?: number;
     lap_count?: number;
+    lap_limit?: number;
+    start_type?: string;
     class_ids?: string[];
     notes?: string;
     layout_id?: string;
@@ -739,11 +741,13 @@ export function showClassModal(trackId: string, allClasses: KartClass[], kc: Kar
     });
 }
 
-const SESSION_TYPES = ['practice', 'quali', 'heat', 'race', 'final', 'driver_meeting'];
-
 function sessionRowHtml(s: FormatSession, idx: number, layouts: Layout[], classes: KartClass[]): string {
     const typeOptions = SESSION_TYPES.map(t =>
         `<option value="${t}" ${s.session_type === t ? 'selected' : ''}>${typeLabel(t)}</option>`,
+    ).join('');
+
+    const startTypeOptions = START_TYPES.map(t =>
+        `<option value="${t}" ${s.start_type === t ? 'selected' : ''}>${startTypeLabel(t)}</option>`,
     ).join('');
 
     const layoutOptions = layouts.map(l =>
@@ -778,6 +782,11 @@ function sessionRowHtml(s: FormatSession, idx: number, layouts: Layout[], classe
                     <input type="checkbox" class="form-check-input sess-reverse" ${s.reverse ? 'checked' : ''}>
                     <label class="form-check-label small">Reverse</label>
                 </div>
+                <select class="form-select form-select-sm sess-start-type" style="max-width:140px" title="Start type">
+                    <option value="">Start type\u2026</option>
+                    ${startTypeOptions}
+                </select>
+                <input type="number" class="form-control form-control-sm sess-lap-limit" placeholder="Lap limit" min="1" style="max-width:100px" value="${s.lap_limit ?? ''}" title="Max laps to count">
             </div>
             ${classes.length > 0 ? `<div class="d-flex align-items-center gap-1 mb-2">
                 <span class="text-body-secondary small me-1">Classes:</span>
@@ -800,6 +809,8 @@ function collectSessions(container: HTMLElement): FormatSession[] {
         const notesEl = row.querySelector('.sess-notes');
         const layoutEl = row.querySelector('.sess-layout');
         const reverseEl = row.querySelector('.sess-reverse');
+        const startTypeEl = row.querySelector('.sess-start-type');
+        const lapLimitEl = row.querySelector('.sess-lap-limit');
         const name = nameEl instanceof HTMLInputElement ? nameEl.value.trim() : '';
         const type = typeEl instanceof HTMLSelectElement ? typeEl.value : 'heat';
         const duration = parseInt(durationEl instanceof HTMLInputElement ? durationEl.value : '', 10) || 0;
@@ -807,6 +818,8 @@ function collectSessions(container: HTMLElement): FormatSession[] {
         const notes = notesEl instanceof HTMLInputElement ? notesEl.value.trim() : '';
         const layoutId = layoutEl instanceof HTMLSelectElement ? layoutEl.value : '';
         const reverse = reverseEl instanceof HTMLInputElement ? reverseEl.checked : false;
+        const startType = startTypeEl instanceof HTMLSelectElement ? startTypeEl.value : '';
+        const lapLimit = parseInt(lapLimitEl instanceof HTMLInputElement ? lapLimitEl.value : '', 10) || 0;
         const classIds: string[] = [];
         row.querySelectorAll('.sess-class').forEach(cb => {
             if (cb instanceof HTMLInputElement && cb.checked && cb.dataset.classId) {
@@ -828,6 +841,12 @@ function collectSessions(container: HTMLElement): FormatSession[] {
         }
         if (reverse) {
             s.reverse = true;
+        }
+        if (startType) {
+            s.start_type = startType;
+        }
+        if (lapLimit > 0) {
+            s.lap_limit = lapLimit;
         }
         if (classIds.length > 0) {
             s.class_ids = classIds;

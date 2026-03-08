@@ -13,21 +13,24 @@ import (
 )
 
 type Session struct {
-	PK           string   `dynamodbav:"pk" json:"-"`
-	SK           string   `dynamodbav:"sk" json:"-"`
-	SessionID    string   `dynamodbav:"sessionId" json:"session_id"`
-	TrackID      string   `dynamodbav:"trackId" json:"track_id"`
-	LayoutID     string   `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
-	UID          string   `dynamodbav:"uid" json:"uid"`
-	SessionType  string   `dynamodbav:"sessionType,omitempty" json:"session_type,omitempty"`
-	ClassIDs     []string `dynamodbav:"classIds,omitempty" json:"class_ids,omitempty"`
-	EventID      string   `dynamodbav:"eventId,omitempty" json:"event_id,omitempty"`
-	SessionOrder int      `dynamodbav:"sessionOrder,omitempty" json:"session_order,omitempty"`
-	SessionName  string   `dynamodbav:"sessionName,omitempty" json:"session_name,omitempty"`
-	Reverse      bool     `dynamodbav:"reverse,omitempty" json:"reverse,omitempty"`
-	Notes        string   `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
-	LapCount     int      `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
-	BestLapMs    int64    `dynamodbav:"bestLapMs,omitempty" json:"best_lap_ms,omitempty"`
+	PK                string   `dynamodbav:"pk" json:"-"`
+	SK                string   `dynamodbav:"sk" json:"-"`
+	SessionID         string   `dynamodbav:"sessionId" json:"session_id"`
+	TrackID           string   `dynamodbav:"trackId" json:"track_id"`
+	LayoutID          string   `dynamodbav:"layoutId,omitempty" json:"layout_id,omitempty"`
+	UID               string   `dynamodbav:"uid" json:"uid"`
+	SessionType       string   `dynamodbav:"sessionType,omitempty" json:"session_type,omitempty"`
+	ClassIDs          []string `dynamodbav:"classIds,omitempty" json:"class_ids,omitempty"`
+	EventID           string   `dynamodbav:"eventId,omitempty" json:"event_id,omitempty"`
+	SessionOrder      int      `dynamodbav:"sessionOrder,omitempty" json:"session_order,omitempty"`
+	SessionName       string   `dynamodbav:"sessionName,omitempty" json:"session_name,omitempty"`
+	Reverse           bool     `dynamodbav:"reverse,omitempty" json:"reverse,omitempty"`
+	Notes             string   `dynamodbav:"notes,omitempty" json:"notes,omitempty"`
+	StartType         string   `dynamodbav:"startType,omitempty" json:"start_type,omitempty"`
+	LapLimit          int      `dynamodbav:"lapLimit,omitempty" json:"lap_limit,omitempty"`
+	LapCount          int      `dynamodbav:"lapCount,omitempty" json:"lap_count,omitempty"`
+	BestLapMs         int64    `dynamodbav:"bestLapMs,omitempty" json:"best_lap_ms,omitempty"`
+	BestLapDriverName string   `dynamodbav:"bestLapDriverName,omitempty" json:"best_lap_driver_name,omitempty"`
 
 	IngestStatus string `dynamodbav:"ingestStatus,omitempty" json:"ingest_status,omitempty"`
 	IngestError  string `dynamodbav:"ingestError,omitempty" json:"ingest_error,omitempty"`

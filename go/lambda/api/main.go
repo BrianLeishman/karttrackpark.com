@@ -58,9 +58,16 @@ func main() {
 	mux.HandleFunc("POST /api/token", handleCreateToken)
 	mux.HandleFunc("DELETE /api/token", handleDeleteToken)
 
-	// Upload
-	mux.HandleFunc("POST /api/upload-url", handleUploadURL)
+	// Assets
 	mux.HandleFunc("POST /api/asset-url", handleAssetURL)
+
+	// Uploads (new upload manager)
+	mux.HandleFunc("POST /api/uploads", handleCreateUpload)
+	mux.HandleFunc("GET /api/uploads", handleListUploads)
+	mux.HandleFunc("GET /api/uploads/{id}", handleGetUpload)
+	mux.HandleFunc("POST /api/uploads/{id}/assign", handleAssignUpload)
+	mux.HandleFunc("POST /api/uploads/{id}/ingest", handleTriggerIngest)
+	mux.HandleFunc("DELETE /api/uploads/{id}", handleDeleteUpload)
 
 	// Events
 	mux.HandleFunc("GET /api/events", handleListEvents)
@@ -132,10 +139,11 @@ func main() {
 	// Sessions
 	mux.HandleFunc("GET /api/sessions", handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", handleGetSession)
+	mux.HandleFunc("PUT /api/sessions/{id}", handleUpdateSession)
 	mux.HandleFunc("GET /api/sessions/{id}/public", handleGetSessionPublic)
-	mux.HandleFunc("POST /api/sessions/{id}/ingest", handleStartIngest)
 	mux.HandleFunc("GET /api/sessions/{id}/laps", handleListLaps)
 	mux.HandleFunc("GET /api/sessions/{id}/laps/{lapNo}", handleGetLap)
+	mux.HandleFunc("GET /api/sessions/{id}/sectors", handleGetSectors)
 
 	// Results
 	mux.HandleFunc("POST /api/sessions/{id}/results", handlePostResult)
@@ -174,4 +182,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func pickFields(src map[string]any, keys ...string) map[string]any {
+	out := make(map[string]any)
+	for _, k := range keys {
+		if v, ok := src[k]; ok {
+			out[k] = v
+		}
+	}
+	return out
 }

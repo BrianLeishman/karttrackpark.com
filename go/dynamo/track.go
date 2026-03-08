@@ -282,7 +282,7 @@ func CreateInvite(ctx context.Context, inv TrackInvite) (*TrackInvite, error) {
 	inv.SK = InviteSK(inv.Email)
 	inv.GSI1PK = InviteGSI1PK(inv.Email)
 	inv.GSI1SK = TrackPK(inv.TrackID)
-	inv.TTL = time.Now().Add(30 * 24 * time.Hour).Unix()
+	inv.TTL = time.Now().UTC().Add(30 * 24 * time.Hour).Unix()
 	inv.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 
 	item, err := attributevalue.MarshalMap(inv)

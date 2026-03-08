@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "go run ../go/cmd/hugo-server/",
     "dev:api": "cd .. && air",
+    "dev:ingest": "cd .. && air -c .air-ingest.toml",
     "build": "go run ../go/cmd/compile-ts/ && hugo --minify"
   },
   "dependencies": {

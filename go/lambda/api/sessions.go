@@ -91,54 +91,9 @@ func handleGetSessionPublic(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, session)
 }
 
-func handleStartIngest(w http.ResponseWriter, r *http.Request) {
-	uid, err := requireAuth(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	sessionID := r.PathValue("id")
-	session, err := dynamo.GetSession(r.Context(), sessionID)
-	if err != nil {
-		log.Printf("get session error: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if session == nil {
-		writeError(w, http.StatusNotFound, "session not found")
-		return
-	}
-
-	if err := requireTrackRole(r, session.TrackID, uid, "owner", "admin"); err != nil {
-		writeError(w, http.StatusForbidden, "access denied")
-		return
-	}
-
-	if session.IngestStatus == "processing" {
-		writeError(w, http.StatusConflict, "ingest already processing")
-		return
-	}
-
-	var req struct {
-		S3Key string `json:"s3_key"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.S3Key == "" {
-		writeError(w, http.StatusBadRequest, "s3_key is required")
-		return
-	}
-
-	if err := dynamo.UpdateSession(r.Context(), sessionID, map[string]any{
-		"ingestStatus": "pending",
-		"rawS3Key":     req.S3Key,
-		"ingestError":  "",
-	}); err != nil {
-		log.Printf("update session error: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
+type LapWithDriver struct {
+	dynamo.Lap
+	DriverName string `json:"driver_name,omitempty"`
 }
 
 func handleListLaps(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +106,101 @@ func handleListLaps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, laps)
+	// Collect unique UIDs
+	uidSet := map[string]struct{}{}
+	for _, l := range laps {
+		if l.UID != "" {
+			uidSet[l.UID] = struct{}{}
+		}
+	}
+
+	// Look up driver names
+	names := map[string]string{}
+	for uid := range uidSet {
+		u, err := dynamo.GetUser(r.Context(), uid)
+		if err != nil {
+			log.Printf("get user %s error: %v", uid, err)
+			continue
+		}
+		if u != nil && u.Name != "" {
+			names[uid] = u.Name
+		}
+	}
+
+	// Build enriched response
+	result := make([]LapWithDriver, len(laps))
+	for i, l := range laps {
+		result[i] = LapWithDriver{
+			Lap:        l,
+			DriverName: names[l.UID],
+		}
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func handleUpdateSession(w http.ResponseWriter, r *http.Request) {
+	uid, err := requireAuth(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	sessionID := r.PathValue("id")
+
+	session, err := dynamo.GetSession(r.Context(), sessionID)
+	if err != nil {
+		log.Printf("get session error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if session == nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	if err := requireTrackRole(r, session.TrackID, uid, "owner", "admin"); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+
+	allowed := map[string]bool{
+		"sessionName": true, "sessionType": true, "sessionOrder": true,
+		"layoutId": true, "reverse": true, "notes": true,
+		"startType": true, "lapLimit": true,
+		"classIds": true,
+	}
+	fields := map[string]any{}
+	for k, v := range req {
+		if allowed[k] {
+			fields[k] = v
+		}
+	}
+
+	if err := dynamo.UpdateSession(r.Context(), sessionID, fields); err != nil {
+		log.Printf("update session error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Also update the EventSession link item if this belongs to an event
+	if session.EventID != "" {
+		linkFields := pickFields(fields, "sessionName", "sessionType", "sessionOrder", "startType", "lapLimit")
+		if len(linkFields) > 0 {
+			if err := dynamo.UpdateEventSession(r.Context(), session.EventID, sessionID, linkFields); err != nil {
+				log.Printf("update event session link error: %v", err)
+				// Non-fatal: session was already updated
+			}
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func handleGetLap(w http.ResponseWriter, r *http.Request) {

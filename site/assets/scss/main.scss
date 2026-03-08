@@ -89,3 +89,25 @@
 #settings-tabs .nav-link {
   font-size: .875rem;
 }
+
+// Driver detail lap table — fastest lap row highlight
+.lap-fastest {
+  --bs-table-bg: rgba(198, 50, 200, 0.12);
+  --bs-table-hover-bg: rgba(198, 50, 200, 0.18);
+}
+[data-bs-theme="dark"] .lap-fastest {
+  --bs-table-bg: rgba(198, 50, 200, 0.18);
+  --bs-table-hover-bg: rgba(198, 50, 200, 0.25);
+}
+
+// Lap delta color bar — thin left border indicating time relative to average
+.lap-delta-fast { border-left: 3px solid #198754; }
+.lap-delta-ok   { border-left: 3px solid #ffc107; }
+.lap-delta-slow { border-left: 3px solid #dc3545; }
+
+// Sector blocks — small colored rectangles with subtle transitions
+.sector-blocks span {
+  transition: opacity 0.15s;
+  opacity: 0.85;
+  &:hover { opacity: 1; }
+}

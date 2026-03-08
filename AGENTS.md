@@ -51,7 +51,7 @@ Before implementing anything, **search for existing patterns first**. This codeb
   - `site/ts/html.ts` — `esc()`, `emptyState()`, `formatDate()`, `typeBadge()`, `statusColor()`, `typeLabel()`
   - `site/ts/url-utils.ts` — `slugify()`, `isHugoServer()`, `*DetailUrl()`, `getEntityId()`, `ensureCorrectSlug()`
   - `site/ts/api.ts` — `api` (axios instance), `apiBase`, `assetsBase`
-- **No deprecated code.** Do not mark things as deprecated — delete them. This project is young. If something is unused, remove it.
+- **No deprecated code.** Do not mark things as deprecated — delete them. Do not keep legacy paths, backward-compatibility shims, or "old" versions of code. This project is young. If something is unused or replaced, remove it entirely.
 - **No re-inventing.** If you need a date formatter, type badge, status color, or URL builder — it already exists. Import it.
 
 ## Project Overview
