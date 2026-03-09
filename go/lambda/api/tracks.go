@@ -135,6 +135,16 @@ func handleListTracks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tracks)
 }
 
+func handleListTracksPublic(w http.ResponseWriter, r *http.Request) {
+	tracks, err := dynamo.ListAllTracks(r.Context())
+	if err != nil {
+		log.Printf("list all tracks error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, tracks)
+}
+
 func handleGetTrackPublic(w http.ResponseWriter, r *http.Request) {
 	trackID := r.PathValue("id")
 

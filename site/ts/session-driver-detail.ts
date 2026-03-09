@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { apiBase, assetsBase } from './api';
 import { esc, formatLapTime, buildSessionInfoPills, initTooltips, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml } from './html';
-import { trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl, sessionDetailUrl, isHugoServer } from './url-utils';
+import { trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl, sessionDetailUrl, isHugoServer, lapAnalysisUrl } from './url-utils';
 
 interface Session {
     session_id: string;
@@ -33,6 +33,7 @@ interface LapItem {
     max_speed?: number;
     uid: string;
     driver_name?: string;
+    telemetry_key?: string;
 }
 
 interface SectorData {
@@ -80,15 +81,6 @@ export function getDriverDetailIds(): { sessionId: string; uid: string } | null 
         return { sessionId: match[1], uid: match[2] };
     }
     return null;
-}
-
-export function driverDetailUrl(sessionId: string, sessionName: string, uid: string, driverName: string): string {
-    if (isHugoServer()) {
-        return `/sessions/?id=${sessionId}&driver=${uid}`;
-    }
-    const sessionSlug = sessionName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const driverSlug = driverName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return `/sessions/${sessionId}/${sessionSlug}/driver/${uid}/${driverSlug}`;
 }
 
 export async function renderSessionDriverDetail(container: HTMLElement): Promise<void> {
@@ -220,6 +212,7 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
     // Build sector lookup for inline rendering
     const sectorLookup = allSectors.length > 0 ? buildSectorLookup(allSectors, ids.uid) : null;
     const hasSectors = sectorLookup !== null;
+    const hasTelemetry = driverLaps.some(l => l.telemetry_key);
 
     // Build lap rows with color coding
     const worstLapMs = Math.max(...driverLaps.map(l => l.lap_time_ms));
@@ -259,6 +252,7 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
             <td class="font-monospace text-body-secondary">${isBest ? '\u2014' : '+' + formatLapTime(delta)}</td>
             ${sectorHtml}
             ${hasSpeed ? `<td class="text-end font-monospace">${l.max_speed ? `${l.max_speed.toFixed(1)} mph` : '\u2014'}</td>` : ''}
+            ${hasTelemetry ? `<td>${l.telemetry_key ? `<button class="btn btn-sm btn-outline-secondary py-0 px-1 analyze-btn" data-lap-no="${l.lap_no}" data-lap-ms="${l.lap_time_ms}" title="Analyze telemetry"><i class="fa-solid fa-chart-line" style="font-size:.75rem"></i></button>` : ''}</td>` : ''}
         </tr>`;
     }).join('');
 
@@ -303,6 +297,7 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
                         <th>Gap</th>
                         ${hasSectors ? '<th>Sectors</th>' : ''}
                         ${hasSpeed ? '<th class="text-end">Max Speed</th>' : ''}
+                        ${hasTelemetry ? '<th style="width:2.5rem"></th>' : ''}
                     </tr>
                 </thead>
                 <tbody>
@@ -322,6 +317,22 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
             void renderLapChart(canvas, driverLaps, bestLapMs, Math.round(avgMs));
         }
     }
+
+    // Wire up analyze buttons — navigate to full-screen analysis page
+    container.addEventListener('click', e => {
+        if (!(e.target instanceof HTMLElement)) {
+            return;
+        }
+        const btn = e.target.closest<HTMLElement>('.analyze-btn');
+        if (!btn) {
+            return;
+        }
+        const lapNo = parseInt(btn.dataset.lapNo ?? '', 10);
+        if (!lapNo) {
+            return;
+        }
+        window.location.href = lapAnalysisUrl(ids.sessionId, sessionName, ids.uid, driverName, lapNo);
+    });
 }
 
 /** Compute sector display data for this driver's laps. */

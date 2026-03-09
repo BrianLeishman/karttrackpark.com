@@ -81,3 +81,23 @@ export function ensureCorrectEventUrl(id: string, name: string, series?: EventSe
     }
     return false;
 }
+
+export function driverDetailUrl(sessionId: string, sessionName: string, uid: string, driverName: string): string {
+    if (isHugoServer()) {
+        return `/sessions/?id=${sessionId}&driver=${uid}`;
+    }
+    return `/sessions/${sessionId}/${slugify(sessionName)}/driver/${uid}/${slugify(driverName)}`;
+}
+
+export function lapAnalysisUrl(
+    sessionId: string,
+    sessionName: string,
+    uid: string,
+    driverName: string,
+    lapNo: number,
+): string {
+    if (isHugoServer()) {
+        return `/sessions/?id=${sessionId}&driver=${uid}&lap=${String(lapNo)}`;
+    }
+    return `/sessions/${sessionId}/${slugify(sessionName)}/driver/${uid}/${slugify(driverName)}/analyze/${String(lapNo)}`;
+}

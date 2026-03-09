@@ -163,6 +163,32 @@ func GetTrack(ctx context.Context, trackID string) (*Track, error) {
 	return &t, nil
 }
 
+// ListAllTracks returns all tracks (scan with filter). Suitable for small datasets.
+func ListAllTracks(ctx context.Context) ([]Track, error) {
+	c, err := client()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := c.Scan(ctx, &dynamodb.ScanInput{
+		TableName:        aws.String(TableName),
+		FilterExpression: aws.String("begins_with(pk, :prefix) AND sk = :sk"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":prefix": &types.AttributeValueMemberS{Value: "TRACK#"},
+			":sk":     &types.AttributeValueMemberS{Value: ProfileSK},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scan tracks: %w", err)
+	}
+
+	var tracks []Track
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &tracks); err != nil {
+		return nil, fmt.Errorf("unmarshal tracks: %w", err)
+	}
+	return tracks, nil
+}
+
 func UpdateTrack(ctx context.Context, trackID string, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil

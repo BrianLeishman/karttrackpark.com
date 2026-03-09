@@ -17,6 +17,7 @@ func main() {
 	// Tracks
 	mux.HandleFunc("POST /api/tracks", handleCreateTrack)
 	mux.HandleFunc("GET /api/tracks", handleListTracks)
+	mux.HandleFunc("GET /api/tracks/public", handleListTracksPublic)
 	mux.HandleFunc("GET /api/tracks/{id}", handleGetTrack)
 	mux.HandleFunc("GET /api/tracks/{id}/public", handleGetTrackPublic)
 	mux.HandleFunc("PUT /api/tracks/{id}", handleUpdateTrack)
@@ -142,8 +143,9 @@ func main() {
 	mux.HandleFunc("PUT /api/sessions/{id}", handleUpdateSession)
 	mux.HandleFunc("GET /api/sessions/{id}/public", handleGetSessionPublic)
 	mux.HandleFunc("GET /api/sessions/{id}/laps", handleListLaps)
-	mux.HandleFunc("GET /api/sessions/{id}/laps/{lapNo}", handleGetLap)
+	mux.HandleFunc("GET /api/sessions/{id}/laps/{uid}/{lapNo}", handleGetLap)
 	mux.HandleFunc("GET /api/sessions/{id}/sectors", handleGetSectors)
+	mux.HandleFunc("GET /api/sessions/{id}/laps/{uid}/{lapNo}/telemetry", handleGetLapTelemetry)
 
 	// Results
 	mux.HandleFunc("POST /api/sessions/{id}/results", handlePostResult)

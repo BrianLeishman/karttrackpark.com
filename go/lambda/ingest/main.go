@@ -228,6 +228,143 @@ func doIngest(ctx context.Context, bkt, key string, upload *dynamo.Upload) error
 		}
 	}
 
+	// Gravity compensation: find a stationary window (GPS speed < 2 mph)
+	// and subtract the mean accelerometer offset (which is the gravity component
+	// due to mounting angle). Fallback: use the full-session mean if no
+	// stationary period found.
+	accelChannels := map[string]bool{"InlA": true, "LatA": true, "VrtA": true}
+	if len(gpsRows) > 0 {
+		// Find best stationary window: at least 0.5s of low-speed data
+		type window struct{ startMs, endMs int32 }
+		var stationaryWindows []window
+		var wStart int32 = -1
+		for _, gp := range gpsRows {
+			if gp.SpeedMph < 2.0 {
+				if wStart < 0 {
+					wStart = gp.TimeMs
+				}
+			} else {
+				if wStart >= 0 && gp.TimeMs-wStart >= 500 {
+					stationaryWindows = append(stationaryWindows, window{wStart, gp.TimeMs})
+				}
+				wStart = -1
+			}
+		}
+		if wStart >= 0 {
+			lastTC := gpsRows[len(gpsRows)-1].TimeMs
+			if lastTC-wStart >= 500 {
+				stationaryWindows = append(stationaryWindows, window{wStart, lastTC})
+			}
+		}
+
+		for si := range sensors {
+			if !accelChannels[sensors[si].name] {
+				continue
+			}
+
+			var offset float64
+			var count int
+
+			if len(stationaryWindows) > 0 {
+				// Use stationary period mean
+				for _, w := range stationaryWindows {
+					for _, tv := range sensors[si].data {
+						if tv.TimeMs >= w.startMs && tv.TimeMs <= w.endMs {
+							offset += tv.Value
+							count++
+						}
+					}
+				}
+			}
+
+			// Fallback: use full-session mean
+			if count < 10 {
+				offset = 0
+				count = 0
+				for _, tv := range sensors[si].data {
+					offset += tv.Value
+					count++
+				}
+			}
+
+			if count > 0 {
+				mean := offset / float64(count)
+				log.Printf("  Gravity offset for %s: %.4f G (%d samples)", sensors[si].name, mean, count)
+				for j := range sensors[si].data {
+					sensors[si].data[j].Value -= mean
+				}
+			}
+		}
+	}
+
+	// Compute GPS-derived acceleration channels from ECEF velocity vectors.
+	// These are gravity-free and match Race Studio's "GPS LonAcc" / "GPS LatAcc".
+	if len(result.GPS) > 2 {
+		sorted := make([]xrk.GPSRecord, len(result.GPS))
+		copy(sorted, result.GPS)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i].TC < sorted[j].TC })
+
+		const g = 9.80665 // m/s²
+		var gpsLonAcc []xrk.TVPair
+		var gpsLatAcc []xrk.TVPair
+
+		for i := 1; i < len(sorted)-1; i++ {
+			prev := sorted[i-1]
+			next := sorted[i+1]
+			dt := float64(next.TC-prev.TC) / 1000.0
+			if dt <= 0 {
+				continue
+			}
+
+			// Current velocity vector (cm/s → m/s)
+			vx := float64(sorted[i].EcefVX) / 100.0
+			vy := float64(sorted[i].EcefVY) / 100.0
+			vz := float64(sorted[i].EcefVZ) / 100.0
+			speed := math.Sqrt(vx*vx + vy*vy + vz*vz)
+
+			// Acceleration vector from central difference (m/s²)
+			ax := (float64(next.EcefVX) - float64(prev.EcefVX)) / 100.0 / dt
+			ay := (float64(next.EcefVY) - float64(prev.EcefVY)) / 100.0 / dt
+			az := (float64(next.EcefVZ) - float64(prev.EcefVZ)) / 100.0 / dt
+
+			tc := sorted[i].TC
+
+			if speed < 0.5 { // nearly stationary
+				gpsLonAcc = append(gpsLonAcc, xrk.TVPair{TimeMs: tc, Value: 0})
+				gpsLatAcc = append(gpsLatAcc, xrk.TVPair{TimeMs: tc, Value: 0})
+				continue
+			}
+
+			// Unit velocity vector (heading direction)
+			ux, uy, uz := vx/speed, vy/speed, vz/speed
+
+			// Longitudinal accel = projection of accel onto velocity direction
+			dot := ax*ux + ay*uy + az*uz
+			lonG := dot / g
+			perpX := ax - dot*ux
+			perpY := ay - dot*uy
+			perpZ := az - dot*uz
+			latG := math.Sqrt(perpX*perpX+perpY*perpY+perpZ*perpZ) / g
+
+			// Sign lateral: use cross product to determine left/right
+			// Cross velocity × accel, check if it points "up" (positive) or "down" (negative)
+			crossZ := vx*perpY - vy*perpX
+			if crossZ < 0 {
+				latG = -latG
+			}
+
+			gpsLonAcc = append(gpsLonAcc, xrk.TVPair{TimeMs: tc, Value: math.Round(lonG*1000) / 1000})
+			gpsLatAcc = append(gpsLatAcc, xrk.TVPair{TimeMs: tc, Value: math.Round(latG*1000) / 1000})
+		}
+
+		if len(gpsLonAcc) > 0 {
+			sensors = append(sensors, sensorData{name: "GLnA", data: gpsLonAcc})
+		}
+		if len(gpsLatAcc) > 0 {
+			sensors = append(sensors, sensorData{name: "GLtA", data: gpsLatAcc})
+		}
+	}
+
 	// Extract metadata
 	metadata := make(map[string]string)
 	if result.Metadata != nil {
@@ -247,6 +384,17 @@ func doIngest(ctx context.Context, bkt, key string, upload *dynamo.Upload) error
 		}
 	}
 
+	// Delete any existing laps for this user in this session (re-upload scenario)
+	if upload.SessionID != "" {
+		deleted, err := dynamo.DeleteLapsForUser(ctx, upload.SessionID, upload.UID)
+		if err != nil {
+			return fmt.Errorf("delete old laps: %w", err)
+		}
+		if deleted > 0 {
+			log.Printf("  Deleted %d old laps for user %s in session %s", deleted, upload.UID, upload.SessionID)
+		}
+	}
+
 	// Filter incomplete laps: drop any lap shorter than 50% of the median
 	fullLaps := filterIncompleteLaps(result.Laps)
 
@@ -254,7 +402,7 @@ func doIngest(ctx context.Context, bkt, key string, upload *dynamo.Upload) error
 	var totalTimeMs int64
 	var uploadLaps []dynamo.UploadLap
 
-	for _, lap := range fullLaps {
+	for lapIdx, lap := range fullLaps {
 		startTC := int32(lap.EndTimeMs - lap.DurationMs)
 		endTC := int32(lap.EndTimeMs)
 
@@ -302,7 +450,7 @@ func doIngest(ctx context.Context, bkt, key string, upload *dynamo.Upload) error
 			}
 		}
 		maxLatG := 0.0
-		if latData, ok := lapSensors["LatA"]; ok {
+		if latData, ok := lapSensors["GLtA"]; ok {
 			for _, tv := range latData {
 				if av := math.Abs(tv.Value); av > maxLatG {
 					maxLatG = av
@@ -311,7 +459,7 @@ func doIngest(ctx context.Context, bkt, key string, upload *dynamo.Upload) error
 		}
 		distFt := lapGPS[len(lapGPS)-1].DistFt - baseDist
 
-		lapNo := int(lap.Number)
+		lapNo := lapIdx + 1 // Sequential numbering after filtering out incomplete laps
 		telem := lapTelemetry{
 			UploadID:   upload.UploadID,
 			LapNo:      lapNo,

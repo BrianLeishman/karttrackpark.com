@@ -204,13 +204,14 @@ func handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetLap(w http.ResponseWriter, r *http.Request) {
-	uid, err := requireAuth(r)
+	authUID, err := requireAuth(r)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	sessionID := r.PathValue("id")
+	driverUID := r.PathValue("uid")
 	lapNoStr := r.PathValue("lapNo")
 
 	lapNo, err := strconv.Atoi(lapNoStr)
@@ -231,8 +232,8 @@ func handleGetLap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if session.UID != uid {
-		member, err := dynamo.GetTrackMember(r.Context(), session.TrackID, uid)
+	if session.UID != authUID {
+		member, err := dynamo.GetTrackMember(r.Context(), session.TrackID, authUID)
 		if err != nil {
 			log.Printf("check membership error: %v", err)
 			writeError(w, http.StatusInternalServerError, "internal error")
@@ -244,7 +245,7 @@ func handleGetLap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	lap, err := dynamo.GetLap(r.Context(), sessionID, lapNo)
+	lap, err := dynamo.GetLap(r.Context(), sessionID, driverUID, lapNo)
 	if err != nil {
 		log.Printf("get lap error: %v", err)
 		writeError(w, http.StatusInternalServerError, "internal error")

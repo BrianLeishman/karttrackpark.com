@@ -3,8 +3,7 @@ import { api, apiBase, assetsBase } from './api';
 import { getAccessToken, isLoggedIn, login } from './auth';
 import { esc, dateFmt, formatLapTime, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel, buildSessionInfoPills, initTooltips, scoringUsesTotalTime, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml } from './html';
 import { openUploadManager } from './upload-manager';
-import { getEntityId, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl } from './url-utils';
-import { driverDetailUrl } from './session-driver-detail';
+import { getEntityId, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl, driverDetailUrl } from './url-utils';
 
 interface Session {
     session_id: string;

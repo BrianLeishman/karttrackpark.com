@@ -8,6 +8,7 @@ import { renderKeys } from './keys';
 import { renderSeriesDetail } from './series-detail';
 import { renderSeriesEdit } from './series-edit';
 import { renderSessionDetail } from './session-detail';
+import { getLapAnalysisIds, renderLapAnalysis } from './lap-analysis';
 import { getDriverDetailIds, renderSessionDriverDetail } from './session-driver-detail';
 import { renderTrackDetail } from './track-detail';
 import { renderTrackEdit } from './track-edit';
@@ -60,7 +61,9 @@ async function init(): Promise<void> {
 
     const sessionDetail = document.getElementById('session-detail');
     if (sessionDetail) {
-        if (getDriverDetailIds()) {
+        if (getLapAnalysisIds()) {
+            void renderLapAnalysis(sessionDetail);
+        } else if (getDriverDetailIds()) {
             void renderSessionDriverDetail(sessionDetail);
         } else {
             void renderSessionDetail(sessionDetail);

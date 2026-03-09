@@ -4,7 +4,7 @@ import { parsePhoneNumberWithError } from 'libphonenumber-js';
 import Sortable from 'sortablejs';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { getEntityId, ensureCorrectSlug, championshipDetailUrl, seriesDetailUrl, eventDetailUrl } from './url-utils';
+import { getEntityId, ensureCorrectSlug, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl } from './url-utils';
 import { championshipFormHtml, bindChampionshipForm } from './championship-form';
 import type { ChampionshipFormBindings } from './championship-form';
 import { outlineMapHtml, bindOutlineMap } from './track-form';
@@ -184,10 +184,53 @@ function bindShowMore(containerId: string, buttonId: string, allItems: string[],
     });
 }
 
+interface TrackListItem {
+    track_id: string;
+    name: string;
+    logo_key?: string;
+    city?: string;
+    state?: string;
+}
+
+async function renderTrackList(container: HTMLElement): Promise<void> {
+    container.innerHTML = '<div class="text-center py-5"><div class="spinner-border" role="status"></div></div>';
+
+    try {
+        const { data: tracks } = await axios.get<TrackListItem[]>(`${apiBase}/api/tracks/public`);
+
+        if (tracks.length === 0) {
+            container.innerHTML = emptyState('No tracks yet.');
+            return;
+        }
+
+        container.innerHTML = `
+            <h4 class="mb-3">Tracks</h4>
+            <div class="list-group">
+                ${tracks.map(t => {
+        const location = [t.city, t.state].filter(Boolean).join(', ');
+        const logo = t.logo_key ?
+            `<img src="${assetsBase}/${t.logo_key}" alt="" width="40" height="40" class="rounded flex-shrink-0" style="object-fit:cover">` :
+            '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:40px;height:40px"><i class="fa-solid fa-flag-checkered"></i></div>';
+        return `
+                    <a href="${trackDetailUrl(t.track_id, t.name)}" class="list-group-item list-group-item-action d-flex align-items-center gap-3" data-track-hover="${t.track_id}">
+                        ${logo}
+                        <div>
+                            <div class="fw-semibold">${esc(t.name)}</div>
+                            ${location ? `<div class="text-body-secondary small">${esc(location)}</div>` : ''}
+                        </div>
+                    </a>`;
+    }).join('')}
+            </div>
+        `;
+    } catch {
+        container.innerHTML = '<div class="alert alert-danger">Failed to load tracks.</div>';
+    }
+}
+
 export async function renderTrackDetail(container: HTMLElement): Promise<void> {
     const trackId = getEntityId('tracks');
     if (!trackId) {
-        container.innerHTML = '<div class="alert alert-warning">No track ID specified.</div>';
+        void renderTrackList(container);
         return;
     }
 
@@ -306,12 +349,12 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         </ul>
         <div class="tab-content">
             <div class="tab-pane fade show active" id="events-pane" role="tabpanel">
-                <h3 class="mb-2">Recent</h3>
-                <div id="recent-events">${recentInitial}</div>
-                ${recentAll.length > PAGE_SIZE ? '<button class="btn btn-sm btn-outline-secondary mt-2" id="show-more-recent">Show more</button>' : ''}
-                <h3 class="mb-2 mt-4">Upcoming</h3>
+                <h3 class="mb-2">Upcoming</h3>
                 <div id="upcoming-events">${upcomingInitial}</div>
                 ${upcomingAll.length > PAGE_SIZE ? '<button class="btn btn-sm btn-outline-secondary mt-2" id="show-more-upcoming">Show more</button>' : ''}
+                <h3 class="mb-2 mt-4">Recent</h3>
+                <div id="recent-events">${recentInitial}</div>
+                ${recentAll.length > PAGE_SIZE ? '<button class="btn btn-sm btn-outline-secondary mt-2" id="show-more-recent">Show more</button>' : ''}
             </div>
             <div class="tab-pane fade" id="champs-pane" role="tabpanel">
                 <div class="d-flex align-items-center mb-3">

@@ -2,6 +2,8 @@ import axios from 'axios';
 import { api, apiBase } from './api';
 import { esc, formatLapTime } from './html';
 
+const PRACTICE_SESSION = '__practice__';
+
 interface UploadLap {
     lap_no: number;
     lap_time_ms: number;
@@ -192,7 +194,7 @@ function renderModal(): void {
 function renderDropZone(): string {
     return `
         <div id="um-dropzone" class="border border-2 border-dashed rounded-3 p-5 text-center" style="cursor:pointer">
-            <i class="fa-solid fa-cloud-arrow-up fa-3x text-body-secondary mb-3 d-block"></i>
+            <div class="text-body-secondary mb-3"><i class="fa-solid fa-cloud-arrow-up fa-3x"></i></div>
             <p class="mb-1 fw-semibold">Drag & drop .xrk files here</p>
             <p class="text-body-secondary small mb-3">or click to browse</p>
             <span class="badge text-bg-secondary">.xrk files only</span>
@@ -258,12 +260,13 @@ function renderUploadRow(u: FileUpload, index: number): string {
             ${u.expanded ? renderLapTable(u, index) : ''}
             ${sessions.length > 0 ? `
             <div class="mt-2">
-                <select class="form-select form-select-sm um-session-select" data-index="${String(index)}" style="max-width:250px">
+                <select class="form-select form-select-sm um-session-select ${u.error ? 'is-invalid' : ''}" data-index="${String(index)}" style="max-width:250px">
                     <option value="">Assign to session\u2026</option>
                     ${sessions.map(s => `<option value="${s.session_id}" ${u.selectedSession === s.session_id ? 'selected' : ''}>${esc(s.session_name ?? s.session_type ?? 'Session')}</option>`).join('')}
                     <option disabled>\u2500\u2500\u2500</option>
-                    <option value="__practice__" ${u.selectedSession === '__practice__' ? 'selected' : ''}>Practice (no session)</option>
+                    <option value="${PRACTICE_SESSION}" ${u.selectedSession === PRACTICE_SESSION ? 'selected' : ''}>Practice (no session)</option>
                 </select>
+                ${u.error ? `<div class="invalid-feedback">${esc(u.error)}</div>` : ''}
             </div>` : ''}
         `;
     }
@@ -467,6 +470,7 @@ async function wireModalEvents(): Promise<void> {
             const idx = parseInt(sel.dataset.index ?? '', 10);
             if (!isNaN(idx) && activeUploads[idx]) {
                 activeUploads[idx].selectedSession = sel.value;
+                activeUploads[idx].error = undefined; // clear validation errors
                 autoExcludeLaps(activeUploads[idx]);
                 renderModal();
             }
@@ -499,6 +503,16 @@ function handleFiles(fileList: FileList): void {
         return;
     }
 
+    // Only auto-fill session when uploading a single file — multiple files
+    // can't all belong to the same session
+    const totalAfter = activeUploads.length + xrkFiles.length;
+    const autoSession = totalAfter === 1 ? opts.sessionId ?? '' : '';
+
+    // Clear existing auto-fills if we went from 1 → many
+    if (totalAfter > 1 && activeUploads.length === 1 && activeUploads[0].selectedSession === (opts.sessionId ?? '')) {
+        activeUploads[0].selectedSession = '';
+    }
+
     for (const file of xrkFiles) {
         activeUploads.push({
             file,
@@ -506,7 +520,7 @@ function handleFiles(fileList: FileList): void {
             progress: 0,
             excludedLaps: new Set(),
             expanded: false,
-            selectedSession: opts.sessionId ?? '',
+            selectedSession: autoSession,
         });
     }
 
@@ -685,6 +699,30 @@ async function submitAll(): Promise<void> {
     }
 
     const toAssign = activeUploads.filter(u => u.state === 'complete' && u.upload);
+
+    // Validate: no two uploads assigned to the same session
+    const sessionCounts = new Map<string, number>();
+    for (const u of toAssign) {
+        if (u.selectedSession && u.selectedSession !== PRACTICE_SESSION) {
+            sessionCounts.set(u.selectedSession, (sessionCounts.get(u.selectedSession) ?? 0) + 1);
+        }
+    }
+    const duplicates = [...sessionCounts.entries()].filter(([, count]) => count > 1);
+    if (duplicates.length > 0) {
+        // Mark the duplicate uploads with an error
+        for (const u of toAssign) {
+            if (u.selectedSession && (sessionCounts.get(u.selectedSession) ?? 0) > 1) {
+                const sessionName = sessions.find(s => s.session_id === u.selectedSession)?.session_name ?? 'session';
+                u.error = `Multiple files assigned to "${sessionName}"`;
+            }
+        }
+        if (fieldset) {
+            fieldset.disabled = false;
+        }
+        renderModal();
+        return;
+    }
+
     for (const u of toAssign) {
         if (!u.upload) {
             continue;
@@ -693,7 +731,7 @@ async function submitAll(): Promise<void> {
             continue;
         }
         let sessionId = u.selectedSession;
-        if (sessionId === '__practice__') {
+        if (sessionId === PRACTICE_SESSION) {
             try {
                 const practiceId = await getOrCreatePracticeSession();
                 if (!practiceId) {

@@ -21,12 +21,16 @@ const AllEventsGSI1PK = "ALLEVENTS"
 // Sort keys
 const ProfileSK = "PROFILE"
 
-func MemberSK(uid string) string   { return "MEMBER#" + uid }
-func InviteSK(email string) string { return "INVITE#" + strings.ToLower(email) }
-func LayoutSK(id string) string    { return "LAYOUT#" + id }
-func ClassSK(id string) string     { return "CLASS#" + id }
-func LapSK(lapNo int) string       { return fmt.Sprintf("LAP#%06d", lapNo) }
-func APIKeySK(keyID string) string { return "APIKEY#" + keyID }
+func MemberSK(uid string) string         { return "MEMBER#" + uid }
+func InviteSK(email string) string       { return "INVITE#" + strings.ToLower(email) }
+func LayoutSK(id string) string          { return "LAYOUT#" + id }
+func ClassSK(id string) string           { return "CLASS#" + id }
+func LapSK(uid string, lapNo int) string { return fmt.Sprintf("LAP#%s#%06d", uid, lapNo) }
+func LapSKPrefixUser(uid string) string  { return "LAP#" + uid + "#" }
+
+// IsNewFormatLapSK returns true if sk matches LAP#uid#lapNo (not the old LAP#lapNo format).
+func IsNewFormatLapSK(sk string) bool { return strings.Count(sk, "#") >= 2 }
+func APIKeySK(keyID string) string    { return "APIKEY#" + keyID }
 
 // Series / Result sort keys
 func SeriesPK(id string) string              { return "SERIES#" + id }

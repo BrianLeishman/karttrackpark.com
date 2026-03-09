@@ -36,7 +36,7 @@ func PutLap(ctx context.Context, l Lap) error {
 	}
 
 	l.PK = SessionPK(l.SessionID)
-	l.SK = LapSK(l.LapNo)
+	l.SK = LapSK(l.UID, l.LapNo)
 
 	item, err := attributevalue.MarshalMap(l)
 	if err != nil {
@@ -50,7 +50,7 @@ func PutLap(ctx context.Context, l Lap) error {
 	return err
 }
 
-func GetLap(ctx context.Context, sessionID string, lapNo int) (*Lap, error) {
+func GetLap(ctx context.Context, sessionID, uid string, lapNo int) (*Lap, error) {
 	c, err := client()
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func GetLap(ctx context.Context, sessionID string, lapNo int) (*Lap, error) {
 		TableName: aws.String(TableName),
 		Key: map[string]types.AttributeValue{
 			"pk": &types.AttributeValueMemberS{Value: SessionPK(sessionID)},
-			"sk": &types.AttributeValueMemberS{Value: LapSK(lapNo)},
+			"sk": &types.AttributeValueMemberS{Value: LapSK(uid, lapNo)},
 		},
 	})
 	if err != nil {
@@ -97,39 +97,52 @@ func ListLapsForSession(ctx context.Context, sessionID string) ([]Lap, error) {
 		return nil, fmt.Errorf("list laps: %w", err)
 	}
 
-	var laps []Lap
-	if err := attributevalue.UnmarshalListOfMaps(out.Items, &laps); err != nil {
+	var all []Lap
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &all); err != nil {
 		return nil, fmt.Errorf("unmarshal laps: %w", err)
+	}
+	// Filter out old-format laps (SK = LAP#000001) — new format is LAP#uid#000001
+	laps := make([]Lap, 0, len(all))
+	for _, l := range all {
+		if IsNewFormatLapSK(l.SK) {
+			laps = append(laps, l)
+		}
 	}
 	return laps, nil
 }
 
 // DeleteLapsForUser deletes all laps belonging to a specific user in a session.
 func DeleteLapsForUser(ctx context.Context, sessionID, uid string) (int, error) {
-	laps, err := ListLapsForSession(ctx, sessionID)
-	if err != nil {
-		return 0, err
-	}
-
 	c, err := client()
 	if err != nil {
 		return 0, err
 	}
 
+	// Query only this user's laps using the UID-scoped sort key prefix
+	out, err := c.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(TableName),
+		KeyConditionExpression: aws.String("pk = :pk AND begins_with(sk, :prefix)"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":     &types.AttributeValueMemberS{Value: SessionPK(sessionID)},
+			":prefix": &types.AttributeValueMemberS{Value: LapSKPrefixUser(uid)},
+		},
+		ProjectionExpression: aws.String("pk, sk"),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("query user laps: %w", err)
+	}
+
 	deleted := 0
-	for _, l := range laps {
-		if l.UID != uid {
-			continue
-		}
+	for _, item := range out.Items {
 		_, err := c.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 			TableName: aws.String(TableName),
 			Key: map[string]types.AttributeValue{
-				"pk": &types.AttributeValueMemberS{Value: SessionPK(sessionID)},
-				"sk": &types.AttributeValueMemberS{Value: LapSK(l.LapNo)},
+				"pk": item["pk"],
+				"sk": item["sk"],
 			},
 		})
 		if err != nil {
-			return deleted, fmt.Errorf("delete lap %d: %w", l.LapNo, err)
+			return deleted, fmt.Errorf("delete lap: %w", err)
 		}
 		deleted++
 	}
@@ -165,13 +178,13 @@ func QueryFastestLaps(ctx context.Context, layoutID, class string, limit int32) 
 }
 
 // VerifyLap marks a lap as verified and populates GSI1 attributes for the leaderboard.
-func VerifyLap(ctx context.Context, sessionID string, lapNo int, layoutID, class string) error {
+func VerifyLap(ctx context.Context, sessionID, uid string, lapNo int, layoutID, class string) error {
 	c, err := client()
 	if err != nil {
 		return err
 	}
 
-	lap, err := GetLap(ctx, sessionID, lapNo)
+	lap, err := GetLap(ctx, sessionID, uid, lapNo)
 	if err != nil {
 		return err
 	}
@@ -183,7 +196,7 @@ func VerifyLap(ctx context.Context, sessionID string, lapNo int, layoutID, class
 		TableName: aws.String(TableName),
 		Key: map[string]types.AttributeValue{
 			"pk": &types.AttributeValueMemberS{Value: SessionPK(sessionID)},
-			"sk": &types.AttributeValueMemberS{Value: LapSK(lapNo)},
+			"sk": &types.AttributeValueMemberS{Value: LapSK(uid, lapNo)},
 		},
 		UpdateExpression: aws.String("SET verified = :v, gsi1pk = :gpk, gsi1sk = :gsk"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{

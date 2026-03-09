@@ -173,15 +173,17 @@ func handleAssignUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write new lap items from upload
+	// Write new lap items from upload (sequential numbering)
+	seqNo := 0
 	for _, ul := range upload.Laps {
 		if !includeAll && !includedSet[ul.LapNo] {
 			continue
 		}
+		seqNo++
 		telemKey := "telemetry/" + uploadID + "/lap-" + strconv.Itoa(ul.LapNo) + ".json"
 		if err := dynamo.PutLap(r.Context(), dynamo.Lap{
 			SessionID:    req.SessionID,
-			LapNo:        ul.LapNo,
+			LapNo:        seqNo,
 			LapTimeMs:    ul.LapTimeMs,
 			MaxSpeed:     ul.MaxSpeed,
 			UID:          uid,
