@@ -275,7 +275,11 @@ export async function renderLapAnalysis(container: HTMLElement): Promise<void> {
         mainEl.classList.add('analysis-fullscreen');
     }
 
-    container.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100"><div class="spinner-border" role="status"></div></div>';
+    container.style.flex = '1';
+    container.style.display = 'flex';
+    container.style.alignItems = 'center';
+    container.style.justifyContent = 'center';
+    container.innerHTML = '<div class="spinner-border" role="status"></div>';
 
     // Fetch session + laps + telemetry
     let session: Session;
@@ -733,6 +737,7 @@ export async function renderLapAnalysis(container: HTMLElement): Promise<void> {
     const classMap = new Map(classes.map(c => [c.class_id, c.name]));
     const infoPills = buildSessionInfoPills({ ...session, track_id: session.track_id }, layoutMap, classMap);
 
+    container.removeAttribute('style');
     container.innerHTML = `
         <div class="analysis-page">
             <div class="analysis-header">
