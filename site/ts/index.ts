@@ -1,4 +1,5 @@
 import 'bootstrap';
+import { initAnalyzeTray } from './analyze-tray';
 import { handleCallback, getUser, login, logout } from './auth';
 import { renderChampionshipDetail } from './championship-detail';
 import { renderChampionshipEdit } from './championship-edit';
@@ -72,6 +73,9 @@ async function init(): Promise<void> {
 
     // Track hover cards (works for all users, including anonymous)
     initTrackHoverCards();
+
+    // Show analyze comparison tray if laps are queued
+    initAnalyzeTray();
 
     // Render auth state in navbar
     const authContainer = document.getElementById('auth');

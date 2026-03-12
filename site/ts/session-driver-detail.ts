@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { apiBase, assetsBase } from './api';
+import { addLapToAnalyze, getAnalyzeLaps, isLapInAnalyze, removeLapFromAnalyze } from './analyze-tray';
 import { esc, formatLapTime, buildSessionInfoPills, initTooltips, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml } from './html';
 import { trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl, sessionDetailUrl, isHugoServer, lapAnalysisUrl } from './url-utils';
 
@@ -215,6 +216,7 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
     const hasTelemetry = driverLaps.some(l => l.telemetry_key);
 
     // Build lap rows with color coding
+    const analyzeLapKeys = new Set(getAnalyzeLaps().map(l => `${l.sessionId}:${l.uid}:${String(l.lapNo)}`));
     const worstLapMs = Math.max(...driverLaps.map(l => l.lap_time_ms));
     const lapsHtml = driverLaps.map(l => {
         const isBest = l.lap_time_ms === bestLapMs;
@@ -252,7 +254,13 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
             <td class="font-monospace text-body-secondary">${isBest ? '\u2014' : '+' + formatLapTime(delta)}</td>
             ${sectorHtml}
             ${hasSpeed ? `<td class="text-end font-monospace">${l.max_speed ? `${l.max_speed.toFixed(1)} mph` : '\u2014'}</td>` : ''}
-            ${hasTelemetry ? `<td>${l.telemetry_key ? `<button class="btn btn-sm btn-outline-secondary py-0 px-1 analyze-btn" data-lap-no="${l.lap_no}" data-lap-ms="${l.lap_time_ms}" title="Analyze telemetry"><i class="fa-solid fa-chart-line" style="font-size:.75rem"></i></button>` : ''}</td>` : ''}
+            ${hasTelemetry ? `<td>${l.telemetry_key ? `<div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary py-0 px-1 analyze-btn" data-lap-no="${l.lap_no}" title="Analyze telemetry"><i class="fa-solid fa-chart-line" style="font-size:.75rem"></i></button>
+                <button class="btn btn-outline-secondary py-0 px-1 dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false"><span class="visually-hidden">Toggle menu</span></button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><button class="dropdown-item compare-toggle-btn" data-lap-no="${l.lap_no}" data-lap-ms="${l.lap_time_ms}">${analyzeLapKeys.has(`${ids.sessionId}:${ids.uid}:${String(l.lap_no)}`) ? 'Remove from analyze' : 'Add to analyze'}</button></li>
+                </ul>
+            </div>` : ''}</td>` : ''}
         </tr>`;
     }).join('');
 
@@ -323,15 +331,52 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
         if (!(e.target instanceof HTMLElement)) {
             return;
         }
-        const btn = e.target.closest<HTMLElement>('.analyze-btn');
-        if (!btn) {
+
+        // Direct analyze button → navigate to single lap analysis
+        const analyzeBtn = e.target.closest<HTMLElement>('.analyze-btn');
+        if (analyzeBtn) {
+            const lapNo = parseInt(analyzeBtn.dataset.lapNo ?? '', 10);
+            if (lapNo) {
+                window.location.href = lapAnalysisUrl(ids.sessionId, sessionName, ids.uid, driverName, lapNo);
+            }
             return;
         }
-        const lapNo = parseInt(btn.dataset.lapNo ?? '', 10);
-        if (!lapNo) {
-            return;
+
+        // Compare toggle → add/remove from analyze tray
+        const compareBtn = e.target.closest<HTMLElement>('.compare-toggle-btn');
+        if (compareBtn) {
+            const lapNo = parseInt(compareBtn.dataset.lapNo ?? '', 10);
+            const lapMs = parseInt(compareBtn.dataset.lapMs ?? '', 10);
+            if (!lapNo) {
+                return;
+            }
+            if (isLapInAnalyze(ids.sessionId, ids.uid, lapNo)) {
+                removeLapFromAnalyze(ids.sessionId, ids.uid, lapNo);
+                compareBtn.textContent = 'Add to analyze';
+            } else {
+                addLapToAnalyze({
+                    sessionId: ids.sessionId,
+                    sessionName,
+                    uid: ids.uid,
+                    driverName,
+                    lapNo,
+                    lapTimeMs: lapMs || 0,
+                    championshipName: seriesCtx?.championship_name,
+                    seriesName: seriesCtx?.series_name,
+                    eventName: event?.name,
+                });
+                compareBtn.textContent = 'Remove from analyze';
+            }
         }
-        window.location.href = lapAnalysisUrl(ids.sessionId, sessionName, ids.uid, driverName, lapNo);
+    });
+
+    // Initialize dropdowns with fixed Popper strategy to escape table-responsive overflow
+    void import('bootstrap').then(bs => {
+        for (const toggle of Array.from(container.querySelectorAll('.dropdown-toggle-split'))) {
+            new bs.Dropdown(toggle, {
+                popperConfig: { strategy: 'fixed' },
+            });
+        }
     });
 }
 
