@@ -852,7 +852,7 @@ export async function renderLapAnalysis(container: HTMLElement): Promise<void> {
             layerPolylines.push(L.polyline(traceLatLngs, {
                 color: layer.color,
                 opacity: 1,
-                weight: 3,
+                weight: 2,
             }).addTo(map));
         }
 
@@ -1112,7 +1112,7 @@ export async function renderLapAnalysis(container: HTMLElement): Promise<void> {
                     borderColor: ds.color,
                     fill: false,
                     pointRadius: 0,
-                    borderWidth: 1.5,
+                    borderWidth: 1,
                     tension: 0.1,
                 })),
             },
