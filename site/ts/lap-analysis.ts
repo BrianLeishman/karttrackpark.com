@@ -1363,7 +1363,7 @@ export async function renderLapAnalysis(container: HTMLElement): Promise<void> {
             }
         }
 
-        if (showIdx < 0) {
+        if (showIdx < 0 || distFt === null) {
             prevVisibleMarkerIdx = -1;
             return;
         }
