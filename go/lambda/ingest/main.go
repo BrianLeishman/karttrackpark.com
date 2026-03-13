@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -70,7 +71,8 @@ func main() {
 
 func handler(ctx context.Context, event events.S3Event) error {
 	for _, rec := range event.Records {
-		key := rec.S3.Object.Key
+		// S3 event notifications URL-encode the key (spaces → +)
+		key, _ := url.QueryUnescape(rec.S3.Object.Key)
 		bkt := rec.S3.Bucket.Name
 		log.Printf("Processing s3://%s/%s", bkt, key)
 		if err := processUpload(ctx, bkt, key); err != nil {
