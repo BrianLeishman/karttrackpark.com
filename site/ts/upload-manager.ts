@@ -171,7 +171,7 @@ function renderModal(): void {
                     <h5 class="modal-title"><i class="fa-solid fa-upload me-2"></i>Upload Laps</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <fieldset id="um-fieldset">
+                <fieldset id="um-fieldset" style="display:contents">
                 <div class="modal-body">
                     ${!hasFiles ? renderDropZone() : renderUploadList()}
                 </div>
