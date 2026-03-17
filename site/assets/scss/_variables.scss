@@ -15,15 +15,14 @@ $border-width: 0.5px;
 $font-weight-normal: 400;
 $font-weight-bold:   500;
 
-// Body
-$body-color:          #2C2C2A;
-$body-bg:             #FFFFFF;
-$text-muted:          #888780;
+// Body — let Bootstrap handle dark mode colors automatically
+// Only override if you want to customize the light mode tone
+// $body-color:       #2C2C2A;
+// $body-bg:          #FFFFFF;
 
 // Card
 $card-border-width:   0.5px;
 $card-border-radius:  14px;
-$card-border-color:   rgba(0, 0, 0, 0.1);
 $card-spacer-y:       1rem;
 $card-spacer-x:       1.25rem;
 
@@ -37,7 +36,22 @@ $btn-font-size:       0.8125rem;
 // Inputs
 $input-border-radius: 8px;
 $input-border-width:  0.5px;
-$input-border-color:  rgba(0, 0, 0, 0.12);
+$input-font-size:     0.8125rem;
+$input-bg:            var(--bs-tertiary-bg);
+$input-focus-box-shadow: none;
+$input-focus-border-color: var(--bs-border-color);
+
+// Modals
+$modal-content-border-width:      0.5px;
+$modal-content-border-radius:     14px;
+$modal-content-box-shadow-xs:     none;
+$modal-content-box-shadow-sm-up:  none;
+$modal-header-border-width:       0.5px;
+$modal-header-padding-y:          1.125rem;
+$modal-header-padding-x:          1.5rem;
+$modal-footer-border-width:       0.5px;
+$modal-inner-padding:             1.25rem 1.5rem;
+$modal-backdrop-opacity:          0.45;
 
 // Transitions
 $transition-base: all 0.15s ease;

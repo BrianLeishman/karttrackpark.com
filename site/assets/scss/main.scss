@@ -106,17 +106,14 @@ $session-colors: (
   color: var(--bs-body-color);
   transition: all 0.15s ease;
   cursor: pointer;
+  border-radius: 10px;
+  margin-bottom: 14px;
 
   &:hover {
     border-color: var(--bs-border-color);
     background: var(--bs-tertiary-bg);
 
     .session-chevron { opacity: 1; }
-  }
-
-  // Standalone card (not in a pair group)
-  &:not(.pair-group .session-card) {
-    border-radius: 10px;
   }
 }
 
@@ -215,6 +212,7 @@ $session-colors: (
 
   .session-card {
     border-radius: 0;
+    margin-bottom: 0;
   }
 
   .session-card:first-child {
@@ -226,7 +224,7 @@ $session-colors: (
   }
 
   .session-card + .session-card {
-    margin-top: -0.5px; // collapse borders
+    margin-top: -0.5px;
   }
 }
 
@@ -249,7 +247,7 @@ $session-colors: (
   padding-top: 14px;
 
   .session-card {
-    border-radius: 10px;
+    margin-bottom: 0;
   }
 
   &:hover { opacity: 0.8; }
@@ -325,6 +323,386 @@ $session-colors: (
 @media (max-width: 575.98px) {
   .stats-row {
     grid-template-columns: 1fr;
+  }
+}
+
+// ── Modal title ────────────────────────────────────────────────
+.modal-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+// ── Field labels ───────────────────────────────────────────────
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  letter-spacing: 0.2px;
+  margin-bottom: 6px;
+}
+
+// ── Field layout grids ────────────────────────────────────────
+.field-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.field-group {
+  margin-bottom: 20px;
+}
+
+.field-full {
+  grid-column: span 2;
+}
+
+// ── Section dividers ──────────────────────────────────────────
+.section-divider {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--bs-tertiary-color);
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--bs-border-color-translucent);
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+// ── Toggle switches ───────────────────────────────────────────
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bs-secondary-color);
+  margin-bottom: 12px;
+}
+
+.toggle {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--bs-border-color);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+
+  .knob {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.15s ease;
+  }
+
+  &.on {
+    background: var(--bs-info);
+
+    .knob {
+      transform: translateX(14px);
+    }
+  }
+}
+
+// ── Chip selectors (multi-select tags) ────────────────────────
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 0.5px solid var(--bs-border-color-translucent);
+  background: transparent;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--bs-border-color);
+  }
+
+  &.active {
+    background: rgba(var(--bs-info-rgb), 0.12);
+    color: var(--bs-info);
+    border-color: transparent;
+  }
+}
+
+// ── Segmented toggles (binary/ternary mode switch) ────────────
+.limit-type-toggle {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 0.5px solid var(--bs-border-color-translucent);
+}
+
+.limit-type-btn {
+  font-size: 11px;
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  color: var(--bs-tertiary-color);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &.active {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    font-weight: 500;
+  }
+}
+
+.limit-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.limit-input {
+  width: 72px;
+  text-align: center;
+}
+
+.limit-unit {
+  font-size: 12px;
+  color: var(--bs-tertiary-color);
+}
+
+// ── Override banner ───────────────────────────────────────────
+.override-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--bs-tertiary-color);
+  font-style: italic;
+  background: var(--bs-tertiary-bg);
+  border-radius: 8px;
+  padding: 8px 12px;
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+
+.override-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--bs-info);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+// ── Session rows (edit modal) ─────────────────────────────────
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 0.5px solid var(--bs-border-color-translucent);
+  margin-bottom: 4px;
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--bs-border-color);
+
+    .session-drag { opacity: 0.8; }
+  }
+
+  &.expanded-parent {
+    border-radius: 8px 8px 0 0;
+    border-bottom-color: transparent;
+    margin-bottom: 0;
+  }
+
+  &.dimmed {
+    opacity: 0.5;
+
+    &:hover { opacity: 0.75; }
+  }
+}
+
+.session-drag {
+  color: var(--bs-tertiary-color);
+  opacity: 0.4;
+  cursor: grab;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+.session-num {
+  font-size: 12px;
+  font-family: var(--bs-font-monospace);
+  color: var(--bs-tertiary-color);
+  min-width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.session-name-input {
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: var(--bs-body-color);
+  flex: 1;
+  min-width: 80px;
+  padding: 2px 0;
+  outline: none;
+}
+
+.session-type-select {
+  font-size: 12px;
+  color: var(--bs-secondary-color);
+  background: var(--bs-tertiary-bg);
+  border: 0.5px solid var(--bs-border-color-translucent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.session-start-select {
+  font-size: 11px;
+  color: var(--bs-tertiary-color);
+  background: transparent;
+  border: 0.5px solid var(--bs-border-color-translucent);
+  border-radius: 5px;
+  padding: 2px 6px;
+  outline: none;
+  cursor: pointer;
+}
+
+.session-expand {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--bs-tertiary-color);
+  cursor: pointer;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+  }
+}
+
+.override-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--bs-info);
+  background: rgba(var(--bs-info-rgb), 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+// ── Expanded override panel ───────────────────────────────────
+.expanded-panel {
+  background: var(--bs-tertiary-bg);
+  border: 0.5px solid var(--bs-border-color-translucent);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 12px 14px 12px 50px;
+  margin-bottom: 4px;
+}
+
+.expanded-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.ef-label {
+  font-size: 11px;
+  color: var(--bs-tertiary-color);
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.ef-select {
+  font-size: 12px;
+  color: var(--bs-secondary-color);
+  background: var(--bs-body-bg);
+  border: 0.5px solid var(--bs-border-color-translucent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ef-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 0.5px solid var(--bs-border-color-translucent);
+  background: transparent;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--bs-border-color);
+  }
+
+  &.active {
+    background: rgba(var(--bs-info-rgb), 0.12);
+    color: var(--bs-info);
+    border-color: transparent;
+  }
+}
+
+.ef-note {
+  font-size: 12px;
+  color: var(--bs-secondary-color);
+  background: var(--bs-body-bg);
+  border: 0.5px solid var(--bs-border-color-translucent);
+  border-radius: 6px;
+  padding: 4px 8px;
+  flex: 1;
+  outline: none;
+}
+
+// ── Add session button ────────────────────────────────────────
+.add-session-btn {
+  width: 100%;
+  padding: 10px;
+  border: 0.5px dashed var(--bs-border-color-translucent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bs-tertiary-color);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: 4px;
+
+  &:hover {
+    border-color: var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    background: var(--bs-tertiary-bg);
   }
 }
 

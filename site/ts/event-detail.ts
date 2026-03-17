@@ -129,55 +129,45 @@ function buildSessionGroups(sessions: FullSession[]): string {
 
     const parts: string[] = [];
     const meetings: FullSession[] = [];
-    const nonMeetings = sessions.filter(s => {
-        if (s.session_type === 'driver_meeting') {
-            meetings.push(s);
-            return false;
-        }
-        return true;
-    });
 
-    // Group into rounds: each quali + its following heat form a pair
-    // Finals form their own section
+    // Categorize sessions
+    const rounds: FullSession[] = []; // quali, heat
+    const finals: FullSession[] = [];
+    const standalone: FullSession[] = []; // practice, etc.
+
+    for (const s of sessions) {
+        const type = s.session_type ?? '';
+        if (type === 'driver_meeting') {
+            meetings.push(s);
+        } else if (type === 'final' || type === 'race') {
+            finals.push(s);
+        } else if (type === 'quali' || type === 'heat') {
+            rounds.push(s);
+        } else {
+            standalone.push(s);
+        }
+    }
+
+    // Standalone sessions (practice, etc.) go first
+    for (const s of standalone) {
+        parts.push(sessionCardHtml(s));
+    }
+
+    // Group rounds: each quali + its following heat form a pair
     let roundNum = 0;
     let i = 0;
-    while (i < nonMeetings.length) {
-        const s = nonMeetings[i];
+    while (i < rounds.length) {
+        const s = rounds[i];
         const type = s.session_type ?? '';
 
-        if (type === 'final' || type === 'race') {
-            // Collect all consecutive finals
-            const finals: FullSession[] = [];
-            while (i < nonMeetings.length) {
-                const ft = nonMeetings[i].session_type ?? '';
-                if (ft !== 'final' && ft !== 'race') {
-                    break;
-                }
-                finals.push(nonMeetings[i]);
-                i++;
-            }
-            parts.push('<div class="section-label">Finals</div>');
-            if (finals.length === 1) {
-                parts.push(sessionCardHtml(finals[0]));
-            } else {
-                parts.push('<div class="pair-group">');
-                for (const f of finals) {
-                    parts.push(sessionCardHtml(f));
-                }
-                parts.push('</div>');
-            }
-            continue;
-        }
-
-        // Quali + heat pair
         if (type === 'quali') {
             roundNum++;
             parts.push(`<div class="section-label">Round ${roundNum}</div>`);
             const pair: FullSession[] = [s];
             i++;
             // Check if next session is a heat (pair it)
-            if (i < nonMeetings.length && nonMeetings[i].session_type === 'heat') {
-                pair.push(nonMeetings[i]);
+            if (i < rounds.length && rounds[i].session_type === 'heat') {
+                pair.push(rounds[i]);
                 i++;
             }
             if (pair.length > 1) {
@@ -192,9 +182,23 @@ function buildSessionGroups(sessions: FullSession[]): string {
             continue;
         }
 
-        // Standalone session (heat without preceding quali, practice, etc.)
+        // Heat without preceding quali — standalone
         parts.push(sessionCardHtml(s));
         i++;
+    }
+
+    // Finals section
+    if (finals.length > 0) {
+        parts.push('<div class="section-label">Finals</div>');
+        if (finals.length === 1) {
+            parts.push(sessionCardHtml(finals[0]));
+        } else {
+            parts.push('<div class="pair-group">');
+            for (const f of finals) {
+                parts.push(sessionCardHtml(f));
+            }
+            parts.push('</div>');
+        }
     }
 
     // Driver meetings at the bottom, dimmed
@@ -284,19 +288,19 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
 
     // Build breadcrumb from series context
     const breadcrumbParts: string[] = [
-        `<a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary" data-track-hover="${track.track_id}">
+        `<a href="${trackDetailUrl(track.track_id, track.name)}" class="d-inline-flex align-items-center gap-2" data-track-hover="${track.track_id}">
             ${track.logo_key ?
-                `<img src="${assetsBase}/${track.logo_key}" alt="" width="28" height="28" class="rounded flex-shrink-0" style="object-fit:cover">` :
-                '<div class="rounded bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:28px;height:28px"><i class="fa-solid fa-flag-checkered small"></i></div>'
+                `<img src="${assetsBase}/${track.logo_key}" alt="" width="24" height="24" class="rounded-2 flex-shrink-0" style="object-fit:cover">` :
+                '<div class="rounded-2 bg-body-secondary flex-shrink-0 d-flex align-items-center justify-content-center" style="width:24px;height:24px"><i class="fa-solid fa-flag-checkered" style="font-size:10px"></i></div>'
             }
             <span>${esc(track.name)}</span>
         </a>`,
     ];
     if (seriesCtx) {
         breadcrumbParts.push(
-            `<a href="${championshipDetailUrl(seriesCtx.championship_id, seriesCtx.championship_name)}" class="d-inline-flex align-items-center gap-2 text-body-secondary">${seriesCtx.championship_logo_key ?
-                `<img src="${assetsBase}/${seriesCtx.championship_logo_key}" alt="" width="24" height="24" class="rounded flex-shrink-0" style="object-fit:cover">` :
-                '<i class="fa-solid fa-trophy small"></i>'
+            `<a href="${championshipDetailUrl(seriesCtx.championship_id, seriesCtx.championship_name)}" class="d-inline-flex align-items-center gap-2">${seriesCtx.championship_logo_key ?
+                `<img src="${assetsBase}/${seriesCtx.championship_logo_key}" alt="" width="24" height="24" class="rounded-2 flex-shrink-0" style="object-fit:cover">` :
+                '<i class="fa-solid fa-trophy" style="font-size:12px"></i>'
             }<span>${esc(seriesCtx.championship_name)}</span></a>`,
         );
         breadcrumbParts.push(
@@ -452,7 +456,32 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
 
 // --- Edit Event Modal ---
 
-function sessionRowHtml(s: FullSession, idx: number, layouts: Layout[], classes: KartClass[]): string {
+/** Detect the most common value for a field across sessions to use as the event default. */
+function detectDefault<T>(sessions: FullSession[], getter: (s: FullSession) => T | undefined): T | undefined {
+    const counts = new Map<string, { val: T; count: number }>();
+    for (const s of sessions) {
+        const v = getter(s);
+        if (v === undefined || v === null) {
+            continue;
+        }
+        const key = JSON.stringify(v);
+        const entry = counts.get(key);
+        if (entry) {
+            entry.count++;
+        } else {
+            counts.set(key, { val: v, count: 1 });
+        }
+    }
+    let best: { val: T; count: number } | undefined;
+    for (const entry of counts.values()) {
+        if (!best || entry.count > best.count) {
+            best = entry;
+        }
+    }
+    return best?.val;
+}
+
+function editSessionRowHtml(s: FullSession, idx: number, hasOverrides: boolean): string {
     const typeOptions = SESSION_TYPES.map(t =>
         `<option value="${t}" ${s.session_type === t ? 'selected' : ''}>${typeLabel(t)}</option>`,
     ).join('');
@@ -461,56 +490,97 @@ function sessionRowHtml(s: FullSession, idx: number, layouts: Layout[], classes:
         `<option value="${t}" ${s.start_type === t ? 'selected' : ''}>${startTypeLabel(t)}</option>`,
     ).join('');
 
+    const isDimmed = s.session_type === 'driver_meeting';
+    const hideStart = s.session_type === 'driver_meeting';
+
+    return `
+        <div class="session-row${isDimmed ? ' dimmed' : ''}${hasOverrides ? ' expanded-parent' : ''}" data-idx="${idx}" data-session-id="${s.session_id}">
+            <span class="session-drag">\u2807</span>
+            <span class="session-num">${idx + 1}</span>
+            <input type="text" class="session-name-input edit-sess-name" placeholder="Session name" value="${esc(s.session_name ?? '')}">
+            <select class="session-type-select edit-sess-type">${typeOptions}</select>
+            <select class="session-start-select edit-sess-start${hideStart ? ' d-none' : ''}">
+                <option value="">Start\u2026</option>
+                ${startTypeOptions}
+            </select>
+            <button type="button" class="session-expand" title="Override defaults">${hasOverrides ? '\u00D7' : '\u22EF'}</button>
+        </div>`;
+}
+
+interface SessionDefaults {
+    layoutId: string;
+    classIds: string[];
+    reverse: boolean;
+    lapLimit: number;
+}
+
+/** Check if a session has any overrides vs the event defaults. Notes always count as an override if non-empty. */
+function sessionHasOverrides(s: FullSession, defaults: SessionDefaults): boolean {
+    if (s.layout_id && s.layout_id !== defaults.layoutId) {
+        return true;
+    }
+    if (s.reverse !== undefined && s.reverse !== defaults.reverse) {
+        return true;
+    }
+    if ((s.lap_limit ?? 0) !== defaults.lapLimit) {
+        return true;
+    }
+    if (s.class_ids && JSON.stringify([...s.class_ids].sort()) !== JSON.stringify([...defaults.classIds].sort())) {
+        return true;
+    }
+    if (s.notes) {
+        return true;
+    }
+    return false;
+}
+
+function editExpandedPanelHtml(s: FullSession, idx: number, layouts: Layout[], classes: KartClass[], defaults: SessionDefaults, hasOverrides: boolean): string {
+    // Show session's own value if it has one, otherwise show the default
+    const effectiveLayoutId = s.layout_id ?? defaults.layoutId;
+    const effectiveReverse = s.reverse ?? defaults.reverse;
+    const effectiveLapLimit = s.lap_limit ?? defaults.lapLimit;
+    const effectiveClassIds = s.class_ids ?? defaults.classIds;
+
     const layoutOptions = layouts.map(l =>
-        `<option value="${l.layout_id}" ${s.layout_id === l.layout_id ? 'selected' : ''}>${esc(l.name)}${l.is_default ? ' (default)' : ''}</option>`,
+        `<option value="${l.layout_id}" ${l.layout_id === effectiveLayoutId ? 'selected' : ''}>${esc(l.name)}</option>`,
     ).join('');
 
-    const classCheckboxes = classes.map(kc => {
-        const checked = s.class_ids?.includes(kc.class_id) ?? kc.is_default;
-        const cbId = `edit-sess-${idx}-class-${kc.class_id}`;
-        return `<div class="form-check form-check-inline mb-0">
-            <input type="checkbox" class="form-check-input edit-sess-class" id="${cbId}" data-class-id="${kc.class_id}" ${checked ? 'checked' : ''}>
-            <label class="form-check-label small" for="${cbId}">${esc(kc.name)}</label>
-        </div>`;
+    const chipHtml = classes.map(kc => {
+        const active = effectiveClassIds.includes(kc.class_id);
+        return `<button type="button" class="ef-chip edit-sess-class${active ? ' active' : ''}" data-class-id="${kc.class_id}">${esc(kc.name)}</button>`;
     }).join('');
 
     return `
-        <div class="edit-session-row border rounded p-2 mb-2" data-idx="${idx}" data-session-id="${s.session_id}">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="text-body-secondary fw-semibold" style="min-width:1.5rem">${idx + 1}</span>
-                <input type="text" class="form-control form-control-sm edit-sess-name" placeholder="Session name" value="${esc(s.session_name ?? '')}">
-                <select class="form-select form-select-sm edit-sess-type" style="max-width:130px">${typeOptions}</select>
+        <div class="expanded-panel" data-idx="${idx}" data-session-id="${s.session_id}" style="${hasOverrides ? '' : 'display:none'}">
+            <div class="expanded-row">
+                <span class="ef-label">Layout</span>
+                <select class="ef-select edit-sess-layout">${layoutOptions}</select>
             </div>
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <div style="min-width:1.5rem"></div>
-                <select class="form-select form-select-sm edit-sess-layout" style="max-width:200px" title="Layout">
-                    ${layoutOptions}
-                </select>
-                <div class="form-check form-check-inline mb-0">
-                    <input type="checkbox" class="form-check-input edit-sess-reverse" ${s.reverse ? 'checked' : ''}>
-                    <label class="form-check-label small">Reverse</label>
-                </div>
-                <select class="form-select form-select-sm edit-sess-start-type" style="max-width:140px" title="Start type">
-                    <option value="">Start type\u2026</option>
-                    ${startTypeOptions}
-                </select>
-                <input type="number" class="form-control form-control-sm edit-sess-lap-limit" placeholder="Lap limit" min="1" style="max-width:100px" value="${s.lap_limit ?? ''}" title="Max laps to count">
+            <div class="expanded-row">
+                <span class="ef-label">Limit</span>
+                <input type="number" class="ef-note edit-sess-lap-limit" style="width:72px;text-align:center" min="1" placeholder="\u2014" value="${effectiveLapLimit || ''}">
+                <span class="limit-unit">laps</span>
             </div>
-            ${classes.length > 0 ? `<div class="d-flex align-items-center gap-1 mb-2">
-                <div style="min-width:1.5rem"></div>
-                <span class="text-body-secondary small me-1">Classes:</span>
-                ${classCheckboxes}
+            <div class="expanded-row">
+                <span class="ef-label">Reverse</span>
+                <div class="toggle${effectiveReverse ? ' on' : ''} edit-sess-reverse"><div class="knob"></div></div>
+            </div>
+            ${classes.length > 0 ? `
+            <div class="expanded-row">
+                <span class="ef-label">Classes</span>
+                <div class="chip-group">${chipHtml}</div>
             </div>` : ''}
-            <div class="d-flex align-items-center gap-2">
-                <div style="min-width:1.5rem"></div>
-                <input type="text" class="form-control form-control-sm edit-sess-notes" placeholder="Notes (optional)" value="${esc(s.notes ?? '')}">
+            <div class="expanded-row">
+                <span class="ef-label">Notes</span>
+                <input type="text" class="ef-note edit-sess-notes" placeholder="Optional session notes\u2026" value="${esc(s.notes ?? '')}" style="flex:1">
             </div>
         </div>`;
 }
 
-function collectSessionEdits(modalEl: HTMLElement): { sessionId: string; fields: Record<string, unknown> }[] {
+function collectSessionEdits(modalEl: HTMLElement, defaultLayoutId: string, defaultClassIds: string[], defaultReverse: boolean, defaultLapLimit: number): { sessionId: string; fields: Record<string, unknown> }[] {
     const results: { sessionId: string; fields: Record<string, unknown> }[] = [];
-    modalEl.querySelectorAll('.edit-session-row').forEach((row, idx) => {
+    const rows = modalEl.querySelectorAll('.session-row[data-session-id]');
+    rows.forEach((row, idx) => {
         if (!(row instanceof HTMLElement)) {
             return;
         }
@@ -521,30 +591,42 @@ function collectSessionEdits(modalEl: HTMLElement): { sessionId: string; fields:
 
         const name = row.querySelector<HTMLInputElement>('.edit-sess-name')?.value.trim() ?? '';
         const type = row.querySelector<HTMLSelectElement>('.edit-sess-type')?.value ?? '';
-        const layoutId = row.querySelector<HTMLSelectElement>('.edit-sess-layout')?.value ?? '';
-        const reverse = row.querySelector<HTMLInputElement>('.edit-sess-reverse')?.checked ?? false;
-        const startType = row.querySelector<HTMLSelectElement>('.edit-sess-start-type')?.value ?? '';
-        const lapLimit = parseInt(row.querySelector<HTMLInputElement>('.edit-sess-lap-limit')?.value ?? '', 10) || 0;
-        const notes = row.querySelector<HTMLInputElement>('.edit-sess-notes')?.value.trim() ?? '';
-        const classIds: string[] = [];
-        row.querySelectorAll('.edit-sess-class').forEach(cb => {
-            if (cb instanceof HTMLInputElement && cb.checked && cb.dataset.classId) {
-                classIds.push(cb.dataset.classId);
-            }
-        });
+        const startType = row.querySelector<HTMLSelectElement>('.edit-sess-start')?.value ?? '';
 
-        const fields: Record<string, unknown> = {
-            sessionName: name,
-            sessionType: type,
-            sessionOrder: idx + 1,
-            layoutId,
-            reverse,
-            startType,
-            lapLimit,
-            notes,
-            classIds,
-        };
-        results.push({ sessionId, fields });
+        // Get override values from expanded panel (or fall back to defaults)
+        const panel = modalEl.querySelector<HTMLElement>(`.expanded-panel[data-session-id="${sessionId}"]`);
+        const layoutId = panel?.querySelector<HTMLSelectElement>('.edit-sess-layout')?.value ?? defaultLayoutId;
+        const reverseEl = panel?.querySelector('.edit-sess-reverse');
+        const reverse = reverseEl ? reverseEl.classList.contains('on') : defaultReverse;
+        const lapLimit = parseInt(panel?.querySelector<HTMLInputElement>('.edit-sess-lap-limit')?.value ?? '', 10) || defaultLapLimit;
+        const notes = panel?.querySelector<HTMLInputElement>('.edit-sess-notes')?.value.trim() ?? '';
+
+        const classIds: string[] = [];
+        const chips = panel?.querySelectorAll('.edit-sess-class');
+        if (chips && chips.length > 0) {
+            chips.forEach(chip => {
+                if (chip instanceof HTMLElement && chip.classList.contains('active') && chip.dataset.classId) {
+                    classIds.push(chip.dataset.classId);
+                }
+            });
+        } else {
+            classIds.push(...defaultClassIds);
+        }
+
+        results.push({
+            sessionId,
+            fields: {
+                sessionName: name,
+                sessionType: type,
+                sessionOrder: idx + 1,
+                layoutId,
+                reverse,
+                startType,
+                lapLimit,
+                notes,
+                classIds,
+            },
+        });
     });
     return results;
 }
@@ -554,17 +636,38 @@ async function openEditModal(event: EventDetail, sessions: FullSession[], layout
 
     const sorted = [...sessions].sort((a, b) => (a.session_order ?? 0) - (b.session_order ?? 0));
 
-    const sessionsRowsHtml = sorted.map((s, i) =>
-        sessionRowHtml(s, i, layouts, classes),
+    // Detect event-level defaults from existing sessions
+    const defaultLayoutId = detectDefault(sorted, s => s.layout_id) ?? (layouts.find(l => l.is_default)?.layout_id ?? layouts[0]?.layout_id ?? '');
+    const defaultClassIds = detectDefault(sorted, s => s.class_ids) ?? classes.filter(c => c.is_default).map(c => c.class_id);
+    const defaultReverse = detectDefault(sorted, s => s.reverse) ?? false;
+    const defaultLapLimit = detectDefault(sorted, s => s.lap_limit) ?? 0;
+
+    const layoutOptions = layouts.map(l =>
+        `<option value="${l.layout_id}" ${l.layout_id === defaultLayoutId ? 'selected' : ''}>${esc(l.name)}</option>`,
     ).join('');
 
-    const modalId = 'edit-event-modal';
-    let modalEl = document.getElementById(modalId);
-    if (modalEl) {
-        modalEl.remove();
-    }
+    const defaultChips = classes.map(kc => {
+        const active = defaultClassIds.includes(kc.class_id);
+        return `<button type="button" class="chip default-class-chip${active ? ' active' : ''}" data-class-id="${kc.class_id}">${esc(kc.name)}</button>`;
+    }).join('');
 
-    modalEl = document.createElement('div');
+    const defaults: SessionDefaults = {
+        layoutId: defaultLayoutId,
+        classIds: defaultClassIds,
+        reverse: defaultReverse,
+        lapLimit: defaultLapLimit,
+    };
+
+    // Build session rows + their expanded panels (auto-expand if session has overrides)
+    const sessionListHtml = sorted.map((s, i) => {
+        const hasOverrides = sessionHasOverrides(s, defaults);
+        return editSessionRowHtml(s, i, hasOverrides) + editExpandedPanelHtml(s, i, layouts, classes, defaults, hasOverrides);
+    }).join('');
+
+    const modalId = 'edit-event-modal';
+    document.getElementById(modalId)?.remove();
+
+    const modalEl = document.createElement('div');
     modalEl.id = modalId;
     modalEl.className = 'modal fade';
     modalEl.tabIndex = -1;
@@ -572,59 +675,179 @@ async function openEditModal(event: EventDetail, sessions: FullSession[], layout
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="fa-solid fa-pen me-2"></i>Edit Event</h5>
+                    <h5 class="modal-title">Edit Event</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Event Name</label>
+                    <div class="field-group">
+                        <label class="field-label">Event name</label>
                         <input type="text" class="form-control" id="edit-event-name" value="${esc(event.name)}">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Description</label>
-                        <textarea class="form-control" id="edit-event-desc" rows="2">${esc(event.description ?? '')}</textarea>
+                    <div class="field-group">
+                        <label class="field-label">Description</label>
+                        <textarea class="form-control" id="edit-event-desc" rows="2" style="resize:vertical;min-height:60px">${esc(event.description ?? '')}</textarea>
                     </div>
-                    <div class="row mb-3">
-                        <div class="col">
-                            <label class="form-label fw-semibold">Start Time</label>
+                    <div class="field-grid-2">
+                        <div class="field-group">
+                            <label class="field-label">Start time</label>
                             <input type="datetime-local" class="form-control" id="edit-event-start" value="${toLocalDatetime(event.start_time)}">
                         </div>
-                        <div class="col">
-                            <label class="form-label fw-semibold">End Time</label>
+                        <div class="field-group">
+                            <label class="field-label">End time</label>
                             <input type="datetime-local" class="form-control" id="edit-event-end" value="${event.end_time ? toLocalDatetime(event.end_time) : ''}">
                         </div>
                     </div>
-                    ${sorted.length > 0 ? `
-                    <hr>
-                    <h6 class="fw-semibold mb-3">Sessions</h6>
-                    <div id="edit-sessions-list">${sessionsRowsHtml}</div>
-                    ` : ''}
+
+                    <div class="section-divider">Event defaults</div>
+                    <div class="field-grid-2">
+                        <div class="field-group">
+                            <label class="field-label">Track layout</label>
+                            <select class="form-select" id="edit-default-layout">${layoutOptions}</select>
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Lap limit</label>
+                            <input type="number" class="form-control" id="edit-default-lap-limit" min="1" placeholder="No limit" value="${defaultLapLimit || ''}">
+                        </div>
+                    </div>
+                    <div class="toggle-row">
+                        <div class="toggle${defaultReverse ? ' on' : ''}" id="edit-default-reverse"><div class="knob"></div></div>
+                        Reverse
+                    </div>
+                    ${classes.length > 0 ? `
+                    <div class="field-group">
+                        <label class="field-label">Classes</label>
+                        <div class="chip-group" id="edit-default-classes">${defaultChips}</div>
+                    </div>` : ''}
+                    <div class="override-banner">
+                        <span class="override-dot"></span>
+                        Sessions inherit these defaults. Click \u22EF on a session to override individually.
+                    </div>
+
+                    <div class="section-divider">Sessions</div>
+                    <div id="edit-sessions-list">${sessionListHtml}</div>
+
                     <div class="alert alert-danger d-none mt-3 mb-0" id="edit-event-error"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="edit-event-save">
-                        <i class="fa-solid fa-check me-1"></i>Save
-                    </button>
+                    <button type="button" class="btn btn-primary" id="edit-event-save">Save</button>
                 </div>
             </div>
         </div>
     `;
     document.body.appendChild(modalEl);
 
+    // --- Interactive bindings ---
+
+    /** Sync default values into all collapsed (non-overridden) panels. */
+    function syncDefaultsToCollapsedPanels(): void {
+        const defLayout = modalEl.querySelector<HTMLSelectElement>('#edit-default-layout')?.value ?? '';
+        const defLapLimit = modalEl.querySelector<HTMLInputElement>('#edit-default-lap-limit')?.value ?? '';
+        const defReverse = modalEl.querySelector('#edit-default-reverse')?.classList.contains('on') ?? false;
+        const defClassIds = new Set<string>();
+        modalEl.querySelectorAll('.default-class-chip.active').forEach(chip => {
+            if (chip instanceof HTMLElement && chip.dataset.classId) {
+                defClassIds.add(chip.dataset.classId);
+            }
+        });
+
+        modalEl.querySelectorAll('.expanded-panel').forEach(panel => {
+            if (!(panel instanceof HTMLElement)) {
+                return;
+            }
+            // Only sync collapsed panels (visible panels have user overrides)
+            if (panel.style.display !== 'none') {
+                return;
+            }
+            const layoutSel = panel.querySelector<HTMLSelectElement>('.edit-sess-layout');
+            if (layoutSel) {
+                layoutSel.value = defLayout;
+            }
+            const limitInput = panel.querySelector<HTMLInputElement>('.edit-sess-lap-limit');
+            if (limitInput) {
+                limitInput.value = defLapLimit;
+            }
+            const reverseToggle = panel.querySelector('.edit-sess-reverse');
+            if (reverseToggle) {
+                reverseToggle.classList.toggle('on', defReverse);
+            }
+            panel.querySelectorAll('.edit-sess-class').forEach(chip => {
+                if (chip instanceof HTMLElement && chip.dataset.classId) {
+                    chip.classList.toggle('active', defClassIds.has(chip.dataset.classId));
+                }
+            });
+        });
+    }
+
+    // Sync when default controls change
+    modalEl.querySelector('#edit-default-layout')?.addEventListener('change', syncDefaultsToCollapsedPanels);
+    modalEl.querySelector('#edit-default-lap-limit')?.addEventListener('input', syncDefaultsToCollapsedPanels);
+
+    // Toggle switches (default + per-session)
+    modalEl.addEventListener('click', e => {
+        const toggle = e.target instanceof HTMLElement ? e.target.closest('.toggle') : null;
+        if (toggle) {
+            toggle.classList.toggle('on');
+            // If this was a default toggle, sync to collapsed panels
+            if (toggle.id === 'edit-default-reverse') {
+                syncDefaultsToCollapsedPanels();
+            }
+        }
+
+        // Chip toggles
+        const chip = e.target instanceof HTMLElement ? e.target.closest('.chip, .ef-chip') : null;
+        if (chip) {
+            chip.classList.toggle('active');
+            // If this was a default class chip, sync to collapsed panels
+            if (chip.classList.contains('default-class-chip')) {
+                syncDefaultsToCollapsedPanels();
+            }
+        }
+
+        // Session expand/collapse
+        const expandBtn = e.target instanceof HTMLElement ? e.target.closest('.session-expand') : null;
+        if (expandBtn) {
+            const row = expandBtn.closest('.session-row');
+            if (!(row instanceof HTMLElement)) {
+                return;
+            }
+            const panel = row.nextElementSibling;
+            if (!(panel instanceof HTMLElement) || !panel.classList.contains('expanded-panel')) {
+                return;
+            }
+            const isOpen = panel.style.display !== 'none';
+            panel.style.display = isOpen ? 'none' : '';
+            row.classList.toggle('expanded-parent', !isOpen);
+            expandBtn.textContent = isOpen ? '\u22EF' : '\u00D7';
+        }
+    });
+
+    // Session type change → toggle dimming + hide/show start type
+    modalEl.addEventListener('change', e => {
+        if (!(e.target instanceof HTMLSelectElement) || !e.target.classList.contains('edit-sess-type')) {
+            return;
+        }
+        const row = e.target.closest('.session-row');
+        if (!(row instanceof HTMLElement)) {
+            return;
+        }
+        const isMeeting = e.target.value === 'driver_meeting';
+        row.classList.toggle('dimmed', isMeeting);
+        const startSel = row.querySelector('.edit-sess-start');
+        if (startSel) {
+            startSel.classList.toggle('d-none', isMeeting);
+        }
+    });
+
     const modal = new bs.Modal(modalEl);
     modal.show();
-
-    // Clean up on hide
-    modalEl.addEventListener('hidden.bs.modal', () => {
-        modalEl?.remove();
-    }, { once: true });
+    modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
 
     // Save handler
     modalEl.querySelector('#edit-event-save')?.addEventListener('click', async () => {
-        const saveBtn = modalEl?.querySelector<HTMLButtonElement>('#edit-event-save');
-        const errorEl = modalEl?.querySelector('#edit-event-error');
-        if (!saveBtn || !modalEl) {
+        const saveBtn = modalEl.querySelector<HTMLButtonElement>('#edit-event-save');
+        const errorEl = modalEl.querySelector('#edit-event-error');
+        if (!saveBtn) {
             return;
         }
         saveBtn.disabled = true;
@@ -650,17 +873,25 @@ async function openEditModal(event: EventDetail, sessions: FullSession[], layout
                 eventFields.endTime = new Date(endVal).toISOString();
             }
 
-            // Update event
+            // Read current defaults from the modal
+            const curDefaultLayout = modalEl.querySelector<HTMLSelectElement>('#edit-default-layout')?.value ?? '';
+            const curDefaultLapLimit = parseInt(modalEl.querySelector<HTMLInputElement>('#edit-default-lap-limit')?.value ?? '', 10) || 0;
+            const curDefaultReverse = modalEl.querySelector('#edit-default-reverse')?.classList.contains('on') ?? false;
+            const curDefaultClassIds: string[] = [];
+            modalEl.querySelectorAll('.default-class-chip.active').forEach(chip => {
+                if (chip instanceof HTMLElement && chip.dataset.classId) {
+                    curDefaultClassIds.push(chip.dataset.classId);
+                }
+            });
+
             await api.put(`/api/events/${event.event_id}`, eventFields);
 
-            // Update all sessions in parallel
-            const sessionEdits = collectSessionEdits(modalEl);
+            const sessionEdits = collectSessionEdits(modalEl, curDefaultLayout, curDefaultClassIds, curDefaultReverse, curDefaultLapLimit);
             await Promise.all(sessionEdits.map(edit =>
                 api.put(`/api/sessions/${edit.sessionId}`, edit.fields),
             ));
 
             modal.hide();
-            // Re-render the page with updated data
             await renderEventDetail(container);
         } catch (err: unknown) {
             let msg = 'Save failed. Please try again.';
@@ -672,7 +903,7 @@ async function openEditModal(event: EventDetail, sessions: FullSession[], layout
                 errorEl.classList.remove('d-none');
             }
             saveBtn.disabled = false;
-            saveBtn.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save';
+            saveBtn.textContent = 'Save';
         }
     });
 }
