@@ -1,5 +1,6 @@
 import axios from 'axios';
-import { apiBase, assetsBase } from './api';
+import { api, apiBase, assetsBase } from './api';
+import { getAccessToken, getUser } from './auth';
 import { addLapToAnalyze, getAnalyzeLaps, isLapInAnalyze, removeLapFromAnalyze } from './analyze-tray';
 import { esc, formatLapTime, buildSessionInfoPills, initTooltips, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml } from './html';
 import { trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl, sessionDetailUrl, isHugoServer, lapAnalysisUrl } from './url-utils';
@@ -150,6 +151,20 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
         // Non-fatal
     }
 
+    // Check if user can delete these laps (own laps or track admin)
+    const token = getAccessToken();
+    const currentUser = getUser();
+    let canDelete = currentUser?.uid === ids.uid; // own laps
+    if (token && !canDelete) {
+        try {
+            const meResp = await axios.get<{ role: string }>(`${apiBase}/api/tracks/${session.track_id}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            const role = meResp.data.role;
+            canDelete = role === 'owner' || role === 'admin';
+        } catch { /* not a member */ }
+    }
+
     // Build breadcrumb
     const seriesCtx = event?.series?.[0];
     const breadcrumbParts: string[] = [];
@@ -288,6 +303,7 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
         <div class="d-flex align-items-center gap-2 mb-2">
             <h1 class="mb-0">${esc(driverName)}</h1>
             ${sessionType ? `<span class="badge ${badgeColor}">${sessionType.replace('_', ' ')}</span>` : ''}
+            ${canDelete ? '<button class="btn btn-sm btn-outline-secondary ms-auto" id="manage-laps-btn"><i class="fa-solid fa-list-check me-1"></i>Manage Laps</button>' : ''}
         </div>
         ${infoPills.length > 0 ? `
         <div class="d-flex flex-wrap gap-3 text-body-secondary small mb-3">
@@ -377,6 +393,123 @@ export async function renderSessionDriverDetail(container: HTMLElement): Promise
                 popperConfig: { strategy: 'fixed' },
             });
         }
+    });
+
+    // Wire up manage laps modal
+    document.getElementById('manage-laps-btn')?.addEventListener('click', async () => {
+        const bs = await import('bootstrap');
+
+        document.getElementById('manage-laps-modal')?.remove();
+        const rows = driverLaps.map(l =>
+            `<tr>
+                <td><input type="checkbox" class="form-check-input lap-check" data-lap-no="${l.lap_no}"></td>
+                <td>${l.lap_no}</td>
+                <td class="font-monospace">${formatLapTime(l.lap_time_ms)}</td>
+                <td>${l.max_speed ? `${l.max_speed.toFixed(1)} mph` : '\u2014'}</td>
+            </tr>`,
+        ).join('');
+
+        document.body.insertAdjacentHTML('beforeend', `
+            <div class="modal fade" id="manage-laps-modal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Manage Laps</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-body-secondary small mb-2">Select laps to delete. This cannot be undone.</p>
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr class="text-body-secondary small">
+                                        <th style="width:2rem"><input type="checkbox" class="form-check-input" id="lap-check-all"></th>
+                                        <th>Lap</th>
+                                        <th>Time</th>
+                                        <th>Speed</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                            <div class="alert alert-danger mt-3 mb-0 d-none" id="manage-laps-error"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-danger" id="manage-laps-save" disabled>
+                                <i class="fa-solid fa-trash me-1"></i>Delete Unchecked
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        const modalEl = document.getElementById('manage-laps-modal');
+        if (!modalEl) {
+            return;
+        }
+        const modal = new bs.Modal(modalEl);
+        modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove(), { once: true });
+
+        const checkAll = modalEl.querySelector<HTMLInputElement>('#lap-check-all');
+        const saveBtn = modalEl.querySelector<HTMLButtonElement>('#manage-laps-save');
+        const checks = () => Array.from(modalEl.querySelectorAll<HTMLInputElement>('.lap-check'));
+
+        function updateSaveBtn(): void {
+            if (!saveBtn) {
+                return;
+            }
+            const checked = checks().filter(c => c.checked);
+            saveBtn.disabled = checked.length === 0;
+            saveBtn.innerHTML = `<i class="fa-solid fa-trash me-1"></i>Delete ${checked.length} Lap${checked.length !== 1 ? 's' : ''}`;
+            if (checkAll) {
+                checkAll.checked = checked.length === checks().length;
+                checkAll.indeterminate = checked.length > 0 && checked.length < checks().length;
+            }
+        }
+
+        checkAll?.addEventListener('change', () => {
+            checks().forEach(c => {
+                c.checked = checkAll.checked;
+            });
+            updateSaveBtn();
+        });
+        modalEl.addEventListener('change', e => {
+            if (e.target instanceof HTMLInputElement && e.target.classList.contains('lap-check')) {
+                updateSaveBtn();
+            }
+        });
+
+        saveBtn?.addEventListener('click', async () => {
+            const selected = checks().filter(c => c.checked);
+            if (selected.length === 0) {
+                return;
+            }
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Deleting\u2026';
+
+            const lapNos = selected.map(c => parseInt(c.dataset.lapNo ?? '', 10)).filter(n => n > 0);
+            try {
+                await api.delete(`/api/sessions/${ids.sessionId}/laps/${ids.uid}`, {
+                    data: { lap_nos: lapNos },
+                });
+                modal.hide();
+                if (lapNos.length === driverLaps.length) {
+                    window.location.href = sessionDetailUrl(ids.sessionId, sessionName);
+                } else {
+                    await renderSessionDriverDetail(container);
+                }
+            } catch {
+                const errEl = modalEl.querySelector('#manage-laps-error');
+                if (errEl) {
+                    errEl.textContent = 'Failed to delete laps. Please try again.';
+                    errEl.classList.remove('d-none');
+                }
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = `<i class="fa-solid fa-trash me-1"></i>Delete ${lapNos.length} Lap${lapNos.length !== 1 ? 's' : ''}`;
+            }
+        });
+
+        modal.show();
     });
 }
 

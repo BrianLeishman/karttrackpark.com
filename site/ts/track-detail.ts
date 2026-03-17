@@ -9,7 +9,7 @@ import { championshipFormHtml, bindChampionshipForm } from './championship-form'
 import type { ChampionshipFormBindings } from './championship-form';
 import { outlineMapHtml, bindOutlineMap } from './track-form';
 import type { TrackAnnotation } from './track-form';
-import { esc, emptyState, formatDate, typeBadge, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel } from './html';
+import { esc, emptyState, formatDate, formatLapTime, positionHtml, typeBadge, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel } from './html';
 import { uploadAsset } from './tracks';
 
 interface TrackPublic {
@@ -107,6 +107,37 @@ export interface Format {
     name: string;
     sessions: FormatSession[];
     created_at: string;
+}
+
+interface LeaderboardEntry {
+    position: number;
+    driver_name: string;
+    uid: string;
+    lap_time_ms: number;
+    max_speed?: number;
+    session_id: string;
+    lap_no: number;
+    layout_id: string;
+    kart_class?: string;
+    created_at: string;
+}
+
+interface LeaderboardLayout {
+    layout_id: string;
+    name: string;
+    is_default: boolean;
+}
+
+interface LeaderboardClass {
+    class_id: string;
+    name: string;
+    is_default: boolean;
+}
+
+interface LeaderboardResponse {
+    entries: LeaderboardEntry[];
+    layouts: LeaderboardLayout[];
+    classes: LeaderboardClass[];
 }
 
 export { slugify, isHugoServer, trackDetailUrl } from './url-utils';
@@ -341,14 +372,34 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
         </div>
         <ul class="nav nav-tabs mb-3" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="events-tab" data-bs-toggle="tab" data-bs-target="#events-pane" type="button" role="tab">Events</button>
+                <button class="nav-link active" id="leaderboard-tab" data-bs-toggle="tab" data-bs-target="#leaderboard-pane" type="button" role="tab"><i class="fa-solid fa-ranking-star me-1"></i>Leaderboard</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events-pane" type="button" role="tab">Events</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="champs-tab" data-bs-toggle="tab" data-bs-target="#champs-pane" type="button" role="tab">Championships</button>
             </li>
         </ul>
         <div class="tab-content">
-            <div class="tab-pane fade show active" id="events-pane" role="tabpanel">
+            <div class="tab-pane fade show active" id="leaderboard-pane" role="tabpanel">
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <select class="form-select form-select-sm w-auto" id="lb-layout"></select>
+                    <select class="form-select form-select-sm w-auto" id="lb-class">
+                        <option value="">All Classes</option>
+                    </select>
+                    <select class="form-select form-select-sm w-auto" id="lb-period">
+                        <option value="week">This Week</option>
+                        <option value="month" selected>Last 30 Days</option>
+                        <option value="year">This Year</option>
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                <div id="leaderboard-body">
+                    <div class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"></div></div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="events-pane" role="tabpanel">
                 <h3 class="mb-2">Upcoming</h3>
                 <div id="upcoming-events">${upcomingInitial}</div>
                 ${upcomingAll.length > PAGE_SIZE ? '<button class="btn btn-sm btn-outline-secondary mt-2" id="show-more-upcoming">Show more</button>' : ''}
@@ -374,6 +425,113 @@ export async function renderTrackDetail(container: HTMLElement): Promise<void> {
             await renderTrackDetail(container);
         });
     });
+
+    // Leaderboard
+    bindLeaderboard(trackId);
+}
+
+function bindLeaderboard(trackId: string): void {
+    const layoutSelect = document.querySelector<HTMLSelectElement>('#lb-layout');
+    const classSelect = document.querySelector<HTMLSelectElement>('#lb-class');
+    const periodSelect = document.querySelector<HTMLSelectElement>('#lb-period');
+    const body = document.getElementById('leaderboard-body');
+    if (!layoutSelect || !classSelect || !periodSelect || !body) {
+        return;
+    }
+
+    // Capture narrowed refs for use inside closure
+    const lbLayout = layoutSelect;
+    const lbClass = classSelect;
+    const lbPeriod = periodSelect;
+    const lbBody = body;
+
+    let dropdownsPopulated = false;
+
+    async function loadLeaderboard(): Promise<void> {
+        lbBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"></div></div>';
+
+        const params = new URLSearchParams();
+        const layoutVal = lbLayout.value;
+        const classVal = lbClass.value;
+        const periodVal = lbPeriod.value;
+        if (layoutVal) {
+            params.set('layout', layoutVal);
+        }
+        if (classVal) {
+            params.set('class', classVal);
+        }
+        if (periodVal) {
+            params.set('period', periodVal);
+        }
+
+        try {
+            const resp = await axios.get<LeaderboardResponse>(
+                `${apiBase}/api/tracks/${trackId}/leaderboard?${params.toString()}`,
+            );
+            const { entries, layouts, classes } = resp.data;
+
+            // Populate dropdowns on first load
+            if (!dropdownsPopulated) {
+                dropdownsPopulated = true;
+                if (layouts.length > 0) {
+                    lbLayout.innerHTML = layouts.map(l =>
+                        `<option value="${l.layout_id}"${l.is_default ? ' selected' : ''}>${esc(l.name)}</option>`,
+                    ).join('');
+                }
+                if (classes.length > 0) {
+                    lbClass.innerHTML = '<option value="">All Classes</option>' +
+                        classes.map(c =>
+                            `<option value="${c.class_id}">${esc(c.name)}</option>`,
+                        ).join('');
+                }
+            }
+
+            if (entries.length === 0) {
+                lbBody.innerHTML = emptyState('No lap times recorded yet.');
+                return;
+            }
+
+            lbBody.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:50px">#</th>
+                                <th>Driver</th>
+                                <th>Best Lap</th>
+                                <th>Top Speed</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${entries.map(e => leaderboardRow(e)).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        } catch {
+            lbBody.innerHTML = '<div class="alert alert-danger">Failed to load leaderboard.</div>';
+        }
+    }
+
+    lbLayout.addEventListener('change', () => void loadLeaderboard());
+    lbClass.addEventListener('change', () => void loadLeaderboard());
+    lbPeriod.addEventListener('change', () => void loadLeaderboard());
+
+    void loadLeaderboard();
+}
+
+function leaderboardRow(e: LeaderboardEntry): string {
+    const driverName = e.driver_name ? esc(e.driver_name) : '<span class="text-body-secondary">Unknown</span>';
+    const speedDisplay = e.max_speed ? `${e.max_speed.toFixed(1)} mph` : '\u2014';
+
+    return `
+        <tr>
+            <td class="text-center fw-bold">${positionHtml(e.position)}</td>
+            <td>${driverName}</td>
+            <td class="font-monospace${e.position === 1 ? ' text-success fw-bold' : ''}">${formatLapTime(e.lap_time_ms)}</td>
+            <td>${speedDisplay}</td>
+            <td class="text-body-secondary">${formatDate(e.created_at)}</td>
+        </tr>`;
 }
 
 function showNewChampModal(trackId: string, onSave: () => Promise<void>): void {

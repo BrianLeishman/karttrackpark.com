@@ -45,7 +45,7 @@ export async function handleCallback(): Promise<boolean> {
     }
 }
 
-export function getUser(): { email: string; name: string; picture: string } | null {
+export function getUser(): { uid: string; email: string; name: string; picture: string } | null {
     const raw = localStorage.getItem('user');
     if (!raw) {
         return null;
@@ -55,14 +55,14 @@ export function getUser(): { email: string; name: string; picture: string } | nu
         if (typeof parsed !== 'object' || parsed === null) {
             return null;
         }
-        if (!('email' in parsed) || !('name' in parsed) || !('picture' in parsed)) {
+        if (!('uid' in parsed) || !('email' in parsed) || !('name' in parsed) || !('picture' in parsed)) {
             return null;
         }
-        const { email, name, picture } = parsed;
-        if (typeof email !== 'string' || typeof name !== 'string' || typeof picture !== 'string') {
+        const { uid, email, name, picture } = parsed;
+        if (typeof uid !== 'string' || typeof email !== 'string' || typeof name !== 'string' || typeof picture !== 'string') {
             return null;
         }
-        return { email, name, picture };
+        return { uid, email, name, picture };
     } catch {
         return null;
     }

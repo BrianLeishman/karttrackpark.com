@@ -173,6 +173,12 @@ func handleAssignUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine kart class: if session has exactly one, use it
+	var kartClass string
+	if len(session.ClassIDs) == 1 {
+		kartClass = session.ClassIDs[0]
+	}
+
 	// Write new lap items from upload (sequential numbering)
 	seqNo := 0
 	for _, ul := range upload.Laps {
@@ -188,6 +194,7 @@ func handleAssignUpload(w http.ResponseWriter, r *http.Request) {
 			MaxSpeed:     ul.MaxSpeed,
 			UID:          uid,
 			LayoutID:     session.LayoutID,
+			KartClass:    kartClass,
 			TelemetryKey: telemKey,
 			CreatedAt:    upload.CreatedAt,
 		}); err != nil {

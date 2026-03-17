@@ -203,6 +203,90 @@ func handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func handleDeleteDriverLaps(w http.ResponseWriter, r *http.Request) {
+	authUID, err := requireAuth(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	sessionID := r.PathValue("id")
+	driverUID := r.PathValue("uid")
+
+	session, err := dynamo.GetSession(r.Context(), sessionID)
+	if err != nil {
+		log.Printf("get session error: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if session == nil {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	// Permission: must be the driver themselves or a track admin/owner
+	if authUID != driverUID {
+		if err := requireTrackRole(r, session.TrackID, authUID, "owner", "admin"); err != nil {
+			writeError(w, http.StatusForbidden, "access denied")
+			return
+		}
+	}
+
+	// Optional body: specific lap numbers to delete. Empty = delete all.
+	var req struct {
+		LapNos []int `json:"lap_nos"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req) // ignore errors — empty body means delete all
+
+	var deleted int
+	if len(req.LapNos) > 0 {
+		// Delete specific laps
+		for _, lapNo := range req.LapNos {
+			if err := dynamo.DeleteLap(r.Context(), sessionID, driverUID, lapNo); err != nil {
+				log.Printf("delete lap %d error: %v", lapNo, err)
+				continue
+			}
+			deleted++
+		}
+	} else {
+		deleted, err = dynamo.DeleteLapsForUser(r.Context(), sessionID, driverUID)
+		if err != nil {
+			log.Printf("delete laps error: %v", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
+	// Recompute session stats
+	allLaps, err := dynamo.ListLapsForSession(r.Context(), sessionID)
+	if err != nil {
+		log.Printf("list laps for stats error: %v", err)
+	} else {
+		var bestLapMs int64
+		var bestLapUID string
+		for _, l := range allLaps {
+			if bestLapMs == 0 || l.LapTimeMs < bestLapMs {
+				bestLapMs = l.LapTimeMs
+				bestLapUID = l.UID
+			}
+		}
+		sessionFields := map[string]any{
+			"lapCount":  len(allLaps),
+			"bestLapMs": bestLapMs,
+		}
+		if bestLapUID != "" {
+			if user, uErr := dynamo.GetUser(r.Context(), bestLapUID); uErr == nil && user != nil && user.Name != "" {
+				sessionFields["bestLapDriverName"] = user.Name
+			}
+		} else {
+			sessionFields["bestLapDriverName"] = ""
+		}
+		_ = dynamo.UpdateSession(r.Context(), sessionID, sessionFields)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int{"deleted": deleted})
+}
+
 func handleGetLap(w http.ResponseWriter, r *http.Request) {
 	authUID, err := requireAuth(r)
 	if err != nil {

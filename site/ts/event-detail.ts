@@ -228,6 +228,7 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
             ${canManage ? `
                 <div class="ms-auto d-flex gap-2">
                     <button class="btn btn-sm btn-outline-primary" id="upload-laps-btn"><i class="fa-solid fa-upload me-1"></i>Upload Laps</button>
+                    ${fullSessions.some(s => s.lap_count && s.lap_count > 0) ? '<button class="btn btn-sm btn-outline-secondary" id="reprocess-all-btn"><i class="fa-solid fa-arrows-rotate me-1"></i>Reprocess Laps</button>' : ''}
                     <button class="btn btn-sm btn-outline-secondary" id="edit-event-btn"><i class="fa-solid fa-pen me-1"></i>Edit</button>
                     <button class="btn btn-sm btn-outline-danger" id="delete-event-btn"><i class="fa-solid fa-trash me-1"></i>Delete</button>
                 </div>
@@ -268,6 +269,29 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
             eventId: event.event_id,
             onComplete: () => void renderEventDetail(container),
         });
+    });
+
+    document.getElementById('reprocess-all-btn')?.addEventListener('click', async () => {
+        const sessionsWithLaps = fullSessions.filter(s => s.lap_count && s.lap_count > 0);
+        if (sessionsWithLaps.length === 0) {
+            return;
+        }
+        const btn = document.getElementById('reprocess-all-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reprocessing\u2026';
+
+        try {
+            for (const s of sessionsWithLaps) {
+                await api.post(`/api/sessions/${s.session_id}/reprocess`);
+            }
+            await renderEventDetail(container);
+        } catch {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i>Reprocess Laps';
+        }
     });
 }
 

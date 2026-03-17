@@ -148,6 +148,18 @@ export function initTooltips(container: HTMLElement): void {
     });
 }
 
+const TROPHY_ICONS = ['fa-trophy', 'fa-medal', 'fa-award'];
+const TROPHY_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
+
+/** Render a position indicator: trophy/medal icons for top 3, plain number otherwise. */
+export function positionHtml(position: number): string {
+    const idx = position - 1;
+    if (idx >= 0 && idx < TROPHY_ICONS.length) {
+        return `<i class="fa-solid ${TROPHY_ICONS[idx]}" style="color:${TROPHY_COLORS[idx]}"></i>`;
+    }
+    return `<span class="text-body-secondary">${position}</span>`;
+}
+
 export function formatLapTime(ms: number): string {
     if (ms <= 0) {
         return '\u2014';

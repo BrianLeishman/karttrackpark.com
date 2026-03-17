@@ -9,6 +9,7 @@ These rules are **non-negotiable**. Violations will be rejected.
 - **ESLint directives are NOT allowed.** Never use `eslint-disable`, `eslint-disable-next-line`, `eslint-disable-line`, or any other eslint directive comment. If ESLint flags your code, fix the code properly.
 - **`as` type assertions are NOT allowed.** They mean you're fighting the compiler. Use proper type narrowing instead: `instanceof`, null checks (`if (!el) return`), `typeof`, `in` operator. The only acceptable `as` is `as const`.
 - **Non-null assertions (`!`) are NOT allowed.** Use null checks or optional chaining (`?.`).
+- **`alert()`, `confirm()`, and `prompt()` are NOT allowed.** Use Bootstrap modals instead. Native browser dialogs look terrible and can't be styled.
 
 ### Correct patterns
 

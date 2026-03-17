@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken, isLoggedIn, login } from './auth';
-import { esc, dateFmt, formatLapTime, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel, buildSessionInfoPills, initTooltips, scoringUsesTotalTime, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml } from './html';
+import { esc, dateFmt, formatLapTime, typeLabel, SESSION_TYPES, START_TYPES, startTypeLabel, buildSessionInfoPills, initTooltips, scoringUsesTotalTime, SESSION_TYPE_BADGE_COLORS, sectorBlocksHtml, positionHtml } from './html';
 import { openUploadManager } from './upload-manager';
 import { getEntityId, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, eventDetailUrl, driverDetailUrl } from './url-utils';
 
@@ -180,9 +180,6 @@ function buildDriverStandings(laps: LapItem[], sessionType?: string): DriverStan
     return standings;
 }
 
-const TROPHY_ICONS = ['fa-trophy', 'fa-medal', 'fa-award'];
-const TROPHY_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
-
 interface SectorDisplay {
     driverBests: Map<string, number[]>;
     overallBest: number[];
@@ -252,10 +249,7 @@ function standingsTableHtml(drivers: DriverStanding[], useTotalTime: boolean, ov
             <tbody>
                 ${drivers.map(d => {
         const isBestOverall = d.bestLapMs === overallBestMs && overallBestMs > 0;
-        const trophyIdx = d.position <= 3 ? d.position - 1 : -1;
-        const posHtml = trophyIdx >= 0 ?
-            `<i class="fa-solid ${TROPHY_ICONS[trophyIdx]}" style="color:${TROPHY_COLORS[trophyIdx]}"></i>` :
-            `<span class="text-body-secondary">${d.position}</span>`;
+        const posHtml = positionHtml(d.position);
         const href = sessionId ? driverDetailUrl(sessionId, sessionName ?? 'session', d.uid, d.name) : '';
         let sectorHtml = '';
         if (sectorDisplay) {
@@ -466,6 +460,9 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
     if (loggedIn) {
         actionButtons.push('<button class="btn btn-sm btn-outline-primary" id="upload-laps-btn"><i class="fa-solid fa-upload me-1"></i>Upload Laps</button>');
     }
+    if ((loggedIn || canManage) && laps.length > 0) {
+        actionButtons.push('<button class="btn btn-sm btn-outline-secondary" id="reprocess-laps-btn"><i class="fa-solid fa-arrows-rotate me-1"></i>Reprocess Laps</button>');
+    }
 
     container.innerHTML = `
         ${breadcrumbParts.length > 0 ? `
@@ -609,6 +606,24 @@ export async function renderSessionDetail(container: HTMLElement): Promise<void>
             });
         });
     }
+
+    // Wire up reprocess laps button
+    document.getElementById('reprocess-laps-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('reprocess-laps-btn');
+        if (!(btn instanceof HTMLButtonElement)) {
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reprocessing\u2026';
+
+        try {
+            await api.post(`/api/sessions/${session.session_id}/reprocess`);
+            await renderSessionDetail(container);
+        } catch {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i>Reprocess Laps';
+        }
+    });
 }
 
 function buildFallbackDriverList(regs: Registration[], results: Result[]): string {

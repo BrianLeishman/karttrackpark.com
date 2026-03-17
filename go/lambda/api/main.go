@@ -36,6 +36,9 @@ func main() {
 	mux.HandleFunc("PUT /api/tracks/{id}/classes/{classId}", handleUpdateKartClass)
 	mux.HandleFunc("DELETE /api/tracks/{id}/classes/{classId}", handleDeleteKartClass)
 
+	// Leaderboard
+	mux.HandleFunc("GET /api/tracks/{id}/leaderboard", handleGetLeaderboard)
+
 	// Invites (track-scoped)
 	mux.HandleFunc("POST /api/tracks/{id}/invites", handleCreateInvite)
 	mux.HandleFunc("GET /api/tracks/{id}/invites", handleListTrackInvites)
@@ -138,11 +141,13 @@ func main() {
 	mux.HandleFunc("GET /api/events/{id}/sessions", handleListEventSessions)
 
 	// Sessions
+	mux.HandleFunc("POST /api/sessions/{id}/reprocess", handleReprocessLaps)
 	mux.HandleFunc("GET /api/sessions", handleListSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", handleGetSession)
 	mux.HandleFunc("PUT /api/sessions/{id}", handleUpdateSession)
 	mux.HandleFunc("GET /api/sessions/{id}/public", handleGetSessionPublic)
 	mux.HandleFunc("GET /api/sessions/{id}/laps", handleListLaps)
+	mux.HandleFunc("DELETE /api/sessions/{id}/laps/{uid}", handleDeleteDriverLaps)
 	mux.HandleFunc("GET /api/sessions/{id}/laps/{uid}/{lapNo}", handleGetLap)
 	mux.HandleFunc("GET /api/sessions/{id}/sectors", handleGetSectors)
 	mux.HandleFunc("GET /api/sessions/{id}/laps/{uid}/{lapNo}/telemetry", handleGetLapTelemetry)
