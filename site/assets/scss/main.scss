@@ -53,6 +53,281 @@
   .logo-light { display: none; }
 }
 
+// ── Session type accent colors ──────────────────────────────────
+$session-colors: (
+  quali: #85B7EB,
+  heat:  #EF9F27,
+  final: #97C459,
+);
+
+// ── Stat cards ─────────────────────────────────────────────────
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card {
+  background: var(--bs-tertiary-bg);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--bs-tertiary-color);
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: var(--bs-secondary-color);
+  margin-top: 2px;
+}
+
+// ── Session cards ──────────────────────────────────────────────
+.session-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--bs-body-bg);
+  border: 0.5px solid var(--bs-border-color-translucent);
+  text-decoration: none;
+  color: var(--bs-body-color);
+  transition: all 0.15s ease;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+
+    .session-chevron { opacity: 1; }
+  }
+
+  // Standalone card (not in a pair group)
+  &:not(.pair-group .session-card) {
+    border-radius: 10px;
+  }
+}
+
+.session-accent {
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+@each $type, $color in $session-colors {
+  .accent-#{$type} { background: $color; }
+  [data-bs-theme="dark"] .accent-#{$type} { background: rgba($color, 0.7); }
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.session-detail {
+  font-size: 12px;
+  color: var(--bs-tertiary-color);
+}
+
+.session-time {
+  font-family: var(--bs-font-monospace);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: right;
+  min-width: 90px;
+}
+
+.session-no-laps {
+  font-size: 12px;
+  color: var(--bs-tertiary-color);
+  text-align: right;
+  min-width: 90px;
+}
+
+.session-chevron {
+  color: var(--bs-tertiary-color);
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+}
+
+// ── Session type badges ────────────────────────────────────────
+.badge-session {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.2px;
+}
+
+.badge-quali {
+  background: rgba(133, 183, 235, 0.12);
+  color: #3B8BD4;
+}
+.badge-heat {
+  background: rgba(239, 159, 39, 0.12);
+  color: #BA7517;
+}
+.badge-final {
+  background: rgba(151, 196, 89, 0.12);
+  color: #639922;
+}
+.badge-meeting {
+  background: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] {
+  .badge-quali {
+    background: rgba(133, 183, 235, 0.10);
+    color: #85B7EB;
+  }
+  .badge-heat {
+    background: rgba(239, 159, 39, 0.10);
+    color: #FAC775;
+  }
+  .badge-final {
+    background: rgba(151, 196, 89, 0.10);
+    color: #C0DD97;
+  }
+}
+
+// ── Pair groups (quali + heat) ─────────────────────────────────
+.pair-group {
+  margin-bottom: 14px;
+
+  .session-card {
+    border-radius: 0;
+  }
+
+  .session-card:first-child {
+    border-radius: 10px 10px 0 0;
+  }
+
+  .session-card:last-child {
+    border-radius: 0 0 10px 10px;
+  }
+
+  .session-card + .session-card {
+    margin-top: -0.5px; // collapse borders
+  }
+}
+
+// ── Section labels ─────────────────────────────────────────────
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--bs-tertiary-color);
+  margin-bottom: 8px;
+}
+
+// ── Driver meeting row — dimmed ────────────────────────────────
+.session-card-meeting {
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+  border-top: 0.5px solid var(--bs-border-color-translucent);
+  margin-top: 14px;
+  padding-top: 14px;
+
+  .session-card {
+    border-radius: 10px;
+  }
+
+  &:hover { opacity: 0.8; }
+}
+
+// ── Ghost danger button ────────────────────────────────────────
+.btn-ghost-danger {
+  background: none;
+  border: none;
+  color: var(--bs-tertiary-color);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0.438rem 1rem;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+
+  &:hover { color: var(--bs-danger); }
+}
+
+// ── Race header ────────────────────────────────────────────────
+.race-title {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+}
+
+.race-meta {
+  font-size: 13px;
+  color: var(--bs-secondary-color);
+  line-height: 1.5;
+}
+
+.race-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+  margin-top: 6px;
+}
+
+// ── Breadcrumb (custom flat style) ─────────────────────────────
+.breadcrumb-flat {
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 1rem;
+
+  a {
+    color: var(--bs-secondary-color);
+    text-decoration: none;
+    transition: color 0.15s ease;
+
+    &:hover { color: var(--bs-body-color); }
+  }
+
+  .breadcrumb-sep {
+    font-size: 11px;
+    opacity: 0.3;
+    margin: 0 6px;
+  }
+
+  .breadcrumb-current {
+    color: var(--bs-secondary-color);
+  }
+}
+
+@media (max-width: 575.98px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 // Track hover card popover — wider than Bootstrap's default 276px
 .track-hover-popover {
   --bs-popover-max-width: 360px;

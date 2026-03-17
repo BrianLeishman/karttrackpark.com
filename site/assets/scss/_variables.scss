@@ -1,3 +1,43 @@
 // Custom Bootstrap variable overrides.
 // Import this AFTER bootstrap/scss/functions and BEFORE bootstrap/scss/variables.
-// Default Bootstrap blue theme — keep this minimal for now.
+
+// Border radius — rounder, softer
+$border-radius:       10px;
+$border-radius-sm:    6px;
+$border-radius-lg:    14px;
+$border-radius-xl:    16px;
+$border-radius-pill:  50rem;
+
+// Border width — thinner
+$border-width: 0.5px;
+
+// Font weights — restrained
+$font-weight-normal: 400;
+$font-weight-bold:   500;
+
+// Body
+$body-color:          #2C2C2A;
+$body-bg:             #FFFFFF;
+$text-muted:          #888780;
+
+// Card
+$card-border-width:   0.5px;
+$card-border-radius:  14px;
+$card-border-color:   rgba(0, 0, 0, 0.1);
+$card-spacer-y:       1rem;
+$card-spacer-x:       1.25rem;
+
+// Buttons
+$btn-border-radius:   8px;
+$btn-font-weight:     500;
+$btn-padding-y:       0.438rem;
+$btn-padding-x:       1rem;
+$btn-font-size:       0.8125rem;
+
+// Inputs
+$input-border-radius: 8px;
+$input-border-width:  0.5px;
+$input-border-color:  rgba(0, 0, 0, 0.12);
+
+// Transitions
+$transition-base: all 0.15s ease;

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { api, apiBase, assetsBase } from './api';
 import { getAccessToken } from './auth';
-import { esc, dateFmt, typeBadge, typeLabel, formatLapTime, SESSION_TYPES, START_TYPES, startTypeLabel } from './html';
+import { esc, dateFmt, typeLabel, formatLapTime, SESSION_TYPES, START_TYPES, startTypeLabel } from './html';
 import { getEntityId, ensureCorrectEventUrl, trackDetailUrl, championshipDetailUrl, seriesDetailUrl, sessionDetailUrl } from './url-utils';
 import { openUploadManager } from './upload-manager';
 
@@ -65,6 +65,144 @@ interface KartClass {
     class_id: string;
     name: string;
     is_default?: boolean;
+}
+
+function sessionBadgeClass(type: string): string {
+    const map: Record<string, string> = {
+        quali: 'badge-session badge-quali',
+        heat: 'badge-session badge-heat',
+        final: 'badge-session badge-final',
+        race: 'badge-session badge-final',
+    };
+    return map[type] ?? 'badge-session badge-meeting';
+}
+
+function sessionAccentClass(type: string): string {
+    const map: Record<string, string> = {
+        quali: 'session-accent accent-quali',
+        heat: 'session-accent accent-heat',
+        final: 'session-accent accent-final',
+        race: 'session-accent accent-final',
+    };
+    return map[type] ?? 'session-accent';
+}
+
+function sessionSubtitle(s: FullSession): string {
+    const type = s.session_type ?? '';
+    const lapCount = s.lap_count ?? 0;
+    if (lapCount === 0) {
+        return '';
+    }
+    if (type === 'quali') {
+        return `${lapCount} laps${s.best_lap_ms ? ` \u00B7 best ${formatLapTime(s.best_lap_ms)}` : ''}`;
+    }
+    if (type === 'heat' || type === 'final' || type === 'race') {
+        return `${lapCount} laps${s.best_lap_driver_name ? ` \u00B7 won by ${esc(s.best_lap_driver_name)}` : ''}`;
+    }
+    return `${lapCount} laps`;
+}
+
+function sessionCardHtml(s: FullSession): string {
+    const type = s.session_type ?? '';
+    const sub = sessionSubtitle(s);
+    const timeHtml = s.best_lap_ms ?
+        `<div class="session-time">${formatLapTime(s.best_lap_ms)}</div>` :
+        '<div class="session-no-laps">No laps</div>';
+
+    return `
+        <a href="${sessionDetailUrl(s.session_id, s.session_name ?? 'session')}" class="session-card">
+            <div class="${sessionAccentClass(type)}"></div>
+            <div class="session-info">
+                <div class="session-name">${esc(s.session_name ?? 'Unnamed')}</div>
+                ${sub ? `<div class="session-detail">${sub}</div>` : ''}
+            </div>
+            <span class="${sessionBadgeClass(type)}">${typeLabel(type)}</span>
+            ${timeHtml}
+            <span class="session-chevron">\u203A</span>
+        </a>`;
+}
+
+function buildSessionGroups(sessions: FullSession[]): string {
+    if (sessions.length === 0) {
+        return '<p class="text-body-secondary">No sessions.</p>';
+    }
+
+    const parts: string[] = [];
+    const meetings: FullSession[] = [];
+    const nonMeetings = sessions.filter(s => {
+        if (s.session_type === 'driver_meeting') {
+            meetings.push(s);
+            return false;
+        }
+        return true;
+    });
+
+    // Group into rounds: each quali + its following heat form a pair
+    // Finals form their own section
+    let roundNum = 0;
+    let i = 0;
+    while (i < nonMeetings.length) {
+        const s = nonMeetings[i];
+        const type = s.session_type ?? '';
+
+        if (type === 'final' || type === 'race') {
+            // Collect all consecutive finals
+            const finals: FullSession[] = [];
+            while (i < nonMeetings.length) {
+                const ft = nonMeetings[i].session_type ?? '';
+                if (ft !== 'final' && ft !== 'race') {
+                    break;
+                }
+                finals.push(nonMeetings[i]);
+                i++;
+            }
+            parts.push('<div class="section-label">Finals</div>');
+            if (finals.length === 1) {
+                parts.push(sessionCardHtml(finals[0]));
+            } else {
+                parts.push('<div class="pair-group">');
+                for (const f of finals) {
+                    parts.push(sessionCardHtml(f));
+                }
+                parts.push('</div>');
+            }
+            continue;
+        }
+
+        // Quali + heat pair
+        if (type === 'quali') {
+            roundNum++;
+            parts.push(`<div class="section-label">Round ${roundNum}</div>`);
+            const pair: FullSession[] = [s];
+            i++;
+            // Check if next session is a heat (pair it)
+            if (i < nonMeetings.length && nonMeetings[i].session_type === 'heat') {
+                pair.push(nonMeetings[i]);
+                i++;
+            }
+            if (pair.length > 1) {
+                parts.push('<div class="pair-group">');
+                for (const p of pair) {
+                    parts.push(sessionCardHtml(p));
+                }
+                parts.push('</div>');
+            } else {
+                parts.push(sessionCardHtml(pair[0]));
+            }
+            continue;
+        }
+
+        // Standalone session (heat without preceding quali, practice, etc.)
+        parts.push(sessionCardHtml(s));
+        i++;
+    }
+
+    // Driver meetings at the bottom, dimmed
+    for (const m of meetings) {
+        parts.push(`<div class="session-card-meeting">${sessionCardHtml(m)}</div>`);
+    }
+
+    return parts.join('\n');
 }
 
 function toLocalDatetime(iso: string): string {
@@ -167,86 +305,103 @@ export async function renderEventDetail(container: HTMLElement): Promise<void> {
     }
 
     fullSessions.sort((a, b) => (a.session_order ?? 0) - (b.session_order ?? 0));
-    const sessionsHtml = fullSessions.length > 0 ?
-        fullSessions.map(s => {
-            const details: string[] = [];
-            if (s.layout_id) {
-                const name = layoutMap.get(s.layout_id);
-                if (name) {
-                    details.push(`<i class="fa-solid fa-route me-1"></i>${esc(name)}${s.reverse ? ' (rev)' : ''}`);
-                }
-            }
-            if (s.start_type) {
-                details.push(`<i class="fa-solid fa-flag me-1"></i>${startTypeLabel(s.start_type)}`);
-            }
-            if (s.lap_limit) {
-                details.push(`<i class="fa-solid fa-hashtag me-1"></i>${String(s.lap_limit)} lap${s.lap_limit !== 1 ? 's' : ''}`);
-            }
-            if (s.class_ids && s.class_ids.length > 0) {
-                const names = s.class_ids.map(id => classMap.get(id)).filter(Boolean);
-                if (names.length > 0) {
-                    details.push(`<i class="fa-solid fa-car me-1"></i>${names.map(n => esc(n ?? '')).join(', ')}`);
-                }
-            }
-            let bestLapHtml = '';
-            if (s.best_lap_ms) {
-                bestLapHtml = `
-                    <span class="font-monospace text-success fw-semibold">${formatLapTime(s.best_lap_ms)}</span>
-                    ${s.best_lap_driver_name ? `<div class="text-body-tertiary" style="font-size:.75em">${esc(s.best_lap_driver_name)}</div>` : ''}`;
-            }
-            return `
-            <a href="${sessionDetailUrl(s.session_id, s.session_name ?? 'session')}" class="row align-items-center gx-2 py-2 border-bottom text-decoration-none text-body">
-                <div class="col-6">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge rounded-pill font-monospace" style="background:var(--bs-tertiary-bg);color:var(--bs-secondary-color);min-width:2rem">${s.session_order ?? ''}</span>
-                        <div>
-                            <div>${esc(s.session_name ?? 'Unnamed')}</div>
-                            ${details.length > 0 ? `<div class="d-flex flex-wrap gap-3 text-body-secondary small mt-1">${details.map(d => `<span>${d}</span>`).join('')}</div>` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="col text-center small text-nowrap">
-                    ${bestLapHtml}
-                </div>
-                <div class="col-auto d-flex align-items-center gap-2">
-                    ${s.session_type ? `<span class="badge text-bg-secondary">${s.session_type.replace('_', ' ')}</span>` : ''}
-                    <i class="fa-solid fa-chevron-right text-body-tertiary"></i>
-                </div>
-            </a>`;
-        }).join('') :
-        '<p class="text-body-secondary">No sessions.</p>';
+
+    // Build layout + class info for the header (show once, not per session)
+    const layoutIds = [...new Set(fullSessions.map(s => s.layout_id).filter(Boolean))];
+    const layoutNames = layoutIds.map(id => layoutMap.get(id ?? '')).filter(Boolean);
+    const classIds = [...new Set(fullSessions.flatMap(s => s.class_ids ?? []))];
+    const classNames = classIds.map(id => classMap.get(id)).filter(Boolean);
+    const metaParts: string[] = [
+        dateFmt.format(new Date(event.start_time)),
+    ];
+    const metaLine2: string[] = [];
+    if (layoutNames.length > 0) {
+        metaLine2.push(layoutNames.map(n => esc(n ?? '')).join(', ') + ' layout');
+    }
+    if (classNames.length > 0) {
+        metaLine2.push(classNames.map(n => esc(n ?? '')).join(', '));
+    }
+
+    // Compute stat card data
+    let fastestLapMs = 0;
+    let fastestLapDriver = '';
+    let fastestLapSession = '';
+    let eventWinner = '';
+    let eventWinnerTime = 0;
+    let totalDrivers = 0;
+
+    for (const s of fullSessions) {
+        if (s.best_lap_ms && (fastestLapMs === 0 || s.best_lap_ms < fastestLapMs)) {
+            fastestLapMs = s.best_lap_ms;
+            fastestLapDriver = s.best_lap_driver_name ?? '';
+            fastestLapSession = s.session_name ?? '';
+        }
+        totalDrivers += s.lap_count ?? 0;
+    }
+
+    // Event winner = best from highest-tier final
+    const finals = fullSessions.filter(s => s.session_type === 'final' || s.session_type === 'race');
+    if (finals.length > 0) {
+        const topFinal = finals[finals.length - 1];
+        if (topFinal.best_lap_driver_name) {
+            eventWinner = topFinal.best_lap_driver_name;
+            eventWinnerTime = topFinal.best_lap_ms ?? 0;
+        }
+    }
+
+    // Group sessions into pair groups and sections
+    const sessionsHtml = buildSessionGroups(fullSessions);
+
+    // Series tag
+    const seriesTag = seriesCtx ?
+        `<span class="race-tag">R${seriesCtx.round_number} ${esc(seriesCtx.series_name)}</span>` :
+        '';
 
     container.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3 text-body-secondary small">
-            ${breadcrumbParts.join('<i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>')}
-            <i class="fa-solid fa-chevron-right mx-1" style="font-size:.6rem"></i>
-            <span class="active">${esc(event.name)}</span>
+        <div class="breadcrumb-flat">
+            ${breadcrumbParts.map((part, i) =>
+                (i > 0 ? '<span class="breadcrumb-sep">\u203A</span>' : '') + part,
+            ).join('')}
+            <span class="breadcrumb-sep">\u203A</span>
+            <span class="breadcrumb-current">${esc(event.name)}</span>
         </div>
-        <div class="d-flex align-items-center gap-2 mb-2">
-            <h1 class="mb-0">${esc(event.name)}</h1>
-            ${typeBadge(event.event_type)}
+        <div class="d-flex align-items-start gap-3 mb-3">
+            <div>
+                <div class="race-title">${esc(event.name)}</div>
+                <div class="race-meta">
+                    ${metaParts.join('')}${metaLine2.length > 0 ? `<br>${metaLine2.join(' \u00B7 ')}` : ''}
+                </div>
+                ${seriesTag}
+                ${event.description ? `<p class="text-body-secondary mt-2 mb-0" style="font-size:13px">${esc(event.description)}</p>` : ''}
+            </div>
             ${canManage ? `
-                <div class="ms-auto d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-primary" id="upload-laps-btn"><i class="fa-solid fa-upload me-1"></i>Upload Laps</button>
-                    ${fullSessions.some(s => s.lap_count && s.lap_count > 0) ? '<button class="btn btn-sm btn-outline-secondary" id="reprocess-all-btn"><i class="fa-solid fa-arrows-rotate me-1"></i>Reprocess Laps</button>' : ''}
+                <div class="ms-auto d-flex gap-2 flex-shrink-0">
+                    <button class="btn btn-sm btn-primary" id="upload-laps-btn"><i class="fa-solid fa-upload me-1"></i>Upload Laps</button>
                     <button class="btn btn-sm btn-outline-secondary" id="edit-event-btn"><i class="fa-solid fa-pen me-1"></i>Edit</button>
-                    <button class="btn btn-sm btn-outline-danger" id="delete-event-btn"><i class="fa-solid fa-trash me-1"></i>Delete</button>
+                    <button class="btn-ghost-danger" id="delete-event-btn"><i class="fa-solid fa-trash me-1"></i>Delete</button>
                 </div>
             ` : ''}
         </div>
-        <p class="text-body-secondary mb-1">
-            <i class="fa-solid fa-clock me-1"></i>${dateFmt.format(new Date(event.start_time))}${event.end_time ? ` \u2014 ${dateFmt.format(new Date(event.end_time))}` : ''}
-        </p>
-        ${event.description ? `<p class="text-body-secondary">${esc(event.description)}</p>` : ''}
-        ${event.series && event.series.length > 0 ? `
-        <div class="d-flex flex-wrap gap-1 mb-3">
-            ${event.series.map(s =>
-                `<a href="${seriesDetailUrl(s.series_id, s.series_name)}" class="badge text-bg-info text-decoration-none">R${s.round_number} ${esc(s.series_name)}</a>`,
-            ).join('')}
+        ${fastestLapMs > 0 ? `
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-label">Fastest Lap</div>
+                <div class="stat-value font-monospace">${formatLapTime(fastestLapMs)}</div>
+                <div class="stat-sub">${fastestLapDriver ? `${esc(fastestLapDriver)} \u00B7 ${esc(fastestLapSession)}` : esc(fastestLapSession)}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Event Winner</div>
+                <div class="stat-value">${eventWinner ? esc(eventWinner) : '\u2014'}</div>
+                ${eventWinnerTime ? `<div class="stat-sub font-monospace">${formatLapTime(eventWinnerTime)}</div>` : ''}
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Laps</div>
+                <div class="stat-value">${totalDrivers}</div>
+                <div class="stat-sub">${fullSessions.filter(s => s.session_type !== 'driver_meeting').length} sessions</div>
+            </div>
         </div>` : ''}
-        ${fullSessions.length > 0 ? `
-        <h3 class="mt-4 mb-2">Sessions</h3>
-        <div>${sessionsHtml}</div>` : ''}
+        ${sessionsHtml}
+        ${canManage && fullSessions.some(s => s.lap_count && s.lap_count > 0) ? '<div class="text-end mt-2"><button class="btn btn-sm btn-outline-secondary" id="reprocess-all-btn"><i class="fa-solid fa-arrows-rotate me-1"></i>Reprocess All Laps</button></div>' : ''}
     `;
 
     document.getElementById('delete-event-btn')?.addEventListener('click', async () => {
