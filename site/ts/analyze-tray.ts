@@ -179,19 +179,6 @@ export function renderTray(): void {
 
     trayEl.classList.toggle('collapsed', collapsed);
 
-    if (collapsed) {
-        trayEl.innerHTML = `
-            <button class="analyze-tray-tab" title="Analyze (${String(laps.length)} laps)">
-                <i class="fa-solid fa-chart-line"></i>
-                <span class="analyze-tray-badge">${String(laps.length)}</span>
-            </button>`;
-        trayEl.querySelector('.analyze-tray-tab')?.addEventListener('click', () => {
-            setCollapsed(false);
-            renderTray();
-        });
-        return;
-    }
-
     const lapItems = laps.map((l, i) => {
         const contextParts: string[] = [];
         if (l.championshipName) {
@@ -220,25 +207,28 @@ export function renderTray(): void {
     const analyzeUrl = buildAnalyzeUrl(laps);
 
     trayEl.innerHTML = `
-        <div class="analyze-tray-header">
-            <span class="fw-semibold" style="font-size:.8rem">Analyze</span>
-            <button class="btn btn-sm btn-link text-body-secondary p-0 ms-auto" id="analyze-tray-collapse" title="Collapse">
-                <i class="fa-solid fa-chevron-right"></i>
-            </button>
-        </div>
-        <div class="analyze-tray-list">${lapItems}</div>
-        <div class="analyze-tray-footer">
-            <a href="${analyzeUrl}" class="btn btn-sm btn-primary w-100">
-                <i class="fa-solid fa-chart-line me-1"></i>Analyze${laps.length > 1 ? ` (${String(laps.length)})` : ''}
-            </a>
-            <button class="btn btn-sm btn-outline-secondary w-100" id="analyze-tray-clear">
-                <i class="fa-solid fa-xmark me-1"></i>Clear all
-            </button>
+        <button class="analyze-tray-tab" title="Analyze (${String(laps.length)} laps)">
+            <span class="analyze-tray-tab-content">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Analyze</span>
+                <span class="analyze-tray-badge">${String(laps.length)}</span>
+            </span>
+        </button>
+        <div class="analyze-tray-body">
+            <div class="analyze-tray-list">${lapItems}</div>
+            <div class="analyze-tray-footer">
+                <a href="${analyzeUrl}" class="btn btn-sm btn-primary w-100">
+                    <i class="fa-solid fa-chart-line me-1"></i>Analyze${laps.length > 1 ? ` (${String(laps.length)})` : ''}
+                </a>
+                <button class="btn btn-sm btn-outline-secondary w-100" id="analyze-tray-clear">
+                    <i class="fa-solid fa-xmark me-1"></i>Clear all
+                </button>
+            </div>
         </div>`;
 
-    // Collapse button
-    trayEl.querySelector('#analyze-tray-collapse')?.addEventListener('click', () => {
-        setCollapsed(true);
+    // Tab toggles open/closed
+    trayEl.querySelector('.analyze-tray-tab')?.addEventListener('click', () => {
+        setCollapsed(!isCollapsed());
         renderTray();
     });
 
